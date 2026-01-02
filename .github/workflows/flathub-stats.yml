@@ -1,0 +1,69 @@
+name: Generate Flathub Stats
+
+on:
+  schedule:
+    # Run weekly on Sundays at 2 AM UTC
+    - cron: '0 2 * * 0'
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  generate-stats:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Required for creating releases
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache cargo index
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache cargo build
+        uses: actions/cache@v4
+        with:
+          path: flathub-stats/target
+          key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('flathub-stats/Cargo.lock') }}
+
+      - name: Generate stats file
+        run: |
+          cd flathub-stats
+          cargo run --release
+          ls -lh ../res/flathub-stats.bitcode-v0-7
+
+      - name: Create Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Get current date for release tag
+          DATE=$(date +%Y-%m-%d)
+          TAG="stats-v0-7-${DATE}"
+          
+          # Delete existing 'latest' tag and release if it exists
+          gh release delete latest --yes || true
+          git push origin :refs/tags/latest || true
+          
+          # Create new release with 'latest' tag
+          gh release create latest \
+            --title "Flathub Stats (Latest)" \
+            --notes "Automatically generated Flathub statistics - Generated on ${DATE}" \
+            res/flathub-stats.bitcode-v0-7
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: flathub-stats-bitcode-v0-7
+          path: res/flathub-stats.bitcode-v0-7
+          retention-days: 30

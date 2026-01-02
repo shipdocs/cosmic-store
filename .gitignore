@@ -7,14 +7,6 @@
 /vendor.tar
 /vendor/
 
-# AI assistant documentation and working notes (local only, not committed)
-CLAUDE_CODE_PROMPT.md
-CLAUDE_INSTRUCTIONS.md
-PROMPT_FOR_CLAUDE_CODE.md
-BITCODE_IMPLEMENTATION_SUMMARY.md
-NEXT_STEPS_BITCODE.md
-WAYLAND_COMPAT_STATUS.md
-WAYLAND_FEATURE_IMPROVEMENTS.md
-ENABLE_WAYLAND_STATS_PLAN.md
-CLEAN_HISTORY_PLAN.md
+# Development notes
+notes/
 plans/

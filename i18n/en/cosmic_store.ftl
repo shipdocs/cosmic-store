@@ -1,6 +1,19 @@
 app-name = COSMIC Store
 back = Back
 cancel = Cancel
+sort-relevance = Relevance
+sort-popular = Most Popular
+sort-recent = Recently Updated
+sort-wayland = Best Wayland Support
+filter-all = All Apps
+filter-excellent = Excellent Wayland Support
+filter-good = Good Wayland Support
+filter-caution = Caution - May Have Issues
+filter-limited = Limited Wayland Support
+filter-unknown = Unknown Compatibility
+editors-choice-tooltip = Editor's Choice
+verified-tooltip = Verified
+monthly-downloads-tooltip = Monthly downloads
 check-for-updates = Check for updates
 checking-for-updates = Checking for updates...
 close = Close
@@ -76,9 +89,11 @@ updates = Updates
 ## Applets page
 enable-flathub-cosmic = Please enable Flathub and COSMIC Flatpak to see available applets.
 manage-repositories = Manage repositories
+editors-choice = Editor's Choice
 
 # Explore Pages
 editors-choice = Editor's choice
+verified = Verified
 popular-apps = Popular apps
 made-for-cosmic = Made for COSMIC
 new-apps = New apps
@@ -144,3 +159,14 @@ theme = Theme
 match-desktop = Match desktop
 dark = Dark
 light = Light
+
+# Wayland compatibility
+compatibility-warning = Compatibility Warning
+x11-only-tooltip = X11 Only - May not work on Wayland
+x11-only-description = This application only supports X11 and may not work properly on COSMIC desktop (Wayland). You may experience issues with window management, file pickers, or the app may not start at all.
+wayland-issues-warning = Potential Wayland Issues
+wayland-issues-description = This application uses {$framework} which may have compatibility issues on Wayland.
+framework-qtwebengine = Qt WebEngine
+framework-electron = Electron
+wayland-native = Wayland Native
+wayland-native-tooltip = This app has native Wayland support and will work perfectly on Wayland sessions

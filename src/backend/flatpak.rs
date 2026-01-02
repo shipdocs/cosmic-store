@@ -624,3 +624,108 @@ impl Backend for Flatpak {
         Ok(())
     }
 }
+
+/// Parse Flatpak metadata to determine Wayland compatibility.
+///
+pub fn parse_flatpak_metadata(
+    app_id: &str,
+    user_installation: bool,
+) -> Option<crate::app_info::WaylandCompatibility> {
+    use crate::app_info::{AppFramework, RiskLevel, WaylandCompatibility, WaylandSupport};
+    use std::fs;
+    use std::path::Path;
+
+    let base_path = if user_installation {
+        dirs::home_dir()?
+            .join(".local/share/flatpak/app")
+            .join(app_id)
+            .join("current/active/metadata")
+    } else {
+        Path::new("/var/lib/flatpak/app")
+            .join(app_id)
+            .join("current/active/metadata")
+    };
+
+    let content = fs::read_to_string(&base_path).ok()?;
+
+    let mut wayland = false;
+    let mut x11 = false;
+    let mut fallback_x11 = false;
+    let mut has_qtwebengine = false;
+    let mut has_electron = false;
+    let mut runtime = String::new();
+    let mut base_app = String::new();
+
+    for line in content.lines() {
+        let line_trimmed = line.trim();
+
+        if line_trimmed.starts_with("sockets=") {
+            let sockets = line_trimmed.strip_prefix("sockets=").unwrap();
+            wayland = sockets.contains("wayland");
+            x11 = sockets.contains("x11") && !sockets.contains("fallback-x11");
+            fallback_x11 = sockets.contains("fallback-x11");
+        }
+
+        if line_trimmed.contains("QTWEBENGINEPROCESS_PATH") {
+            has_qtwebengine = true;
+        }
+
+        if line_trimmed.starts_with("ELECTRON_")
+            || line_trimmed.contains("Chromium.BaseApp")
+            || base_app.contains("Chromium.BaseApp")
+        {
+            has_electron = true;
+        }
+
+        if line_trimmed.starts_with("runtime=") {
+            runtime = line_trimmed.strip_prefix("runtime=").unwrap().to_string();
+        }
+
+        if line_trimmed.starts_with("base=") {
+            base_app = line_trimmed.strip_prefix("base=").unwrap().to_string();
+        }
+    }
+
+    let support = match (wayland, x11, fallback_x11) {
+        (true, _, _) => WaylandSupport::Native,
+        (false, _, true) => WaylandSupport::Fallback,
+        (false, true, false) => WaylandSupport::X11Only,
+        _ => WaylandSupport::Unknown,
+    };
+
+    let framework = if has_qtwebengine {
+        AppFramework::QtWebEngine
+    } else if has_electron {
+        AppFramework::Electron
+    } else if runtime.contains("org.kde.Platform") {
+        if runtime.contains("/6.") {
+            AppFramework::Qt6
+        } else if runtime.contains("/5.") {
+            AppFramework::Qt5
+        } else {
+            AppFramework::Unknown
+        }
+    } else if runtime.contains("org.gnome.Platform") {
+        AppFramework::GTK3
+    } else {
+        AppFramework::Unknown
+    };
+
+    let risk_level = match (&support, &framework) {
+        (WaylandSupport::X11Only, _) => RiskLevel::Critical,
+        (_, AppFramework::QtWebEngine) => RiskLevel::High,
+        (_, AppFramework::Electron) => RiskLevel::High,
+        (WaylandSupport::Native, AppFramework::Qt6) => RiskLevel::Medium,
+        (WaylandSupport::Fallback, _) => RiskLevel::Medium,
+        (WaylandSupport::Native, AppFramework::Qt5) => RiskLevel::Medium,
+        (WaylandSupport::Native, AppFramework::GTK3) => RiskLevel::Low,
+        (WaylandSupport::Native, AppFramework::Native) => RiskLevel::Low,
+        _ => RiskLevel::Medium,
+    };
+
+    Some(WaylandCompatibility {
+        support,
+        framework,
+        risk_level,
+    })
+}

@@ -144,6 +144,199 @@ pub enum AppUrl {
     Translate(String),
 }
 
+/// Wayland socket support level based on Flatpak metadata
+#[derive(Clone, Copy, Debug, Default, Hash, Eq, PartialEq, bitcode::Decode, bitcode::Encode)]
+pub enum WaylandSupport {
+    Native,
+    #[default]
+    Fallback,
+    X11Only,
+    Unknown,
+}
+
+/// Application framework detection
+#[derive(Clone, Copy, Debug, Default, Hash, Eq, PartialEq, bitcode::Decode, bitcode::Encode)]
+pub enum AppFramework {
+    #[default]
+    Native,
+    GTK3,
+    GTK4,
+    Qt5,
+    Qt6,
+    QtWebEngine,
+    Electron,
+    Unknown,
+}
+
+/// Risk level for Wayland compatibility
+#[derive(Clone, Copy, Debug, Default, Hash, Eq, PartialEq, bitcode::Decode, bitcode::Encode)]
+pub enum RiskLevel {
+    #[default]
+    Low,
+    Medium,
+    High,
+    Critical,
+}
+
+/// Wayland compatibility information
+#[derive(Clone, Copy, Debug, Default, Hash, Eq, PartialEq, bitcode::Decode, bitcode::Encode)]
+pub struct WaylandCompatibility {
+    pub support: WaylandSupport,
+    pub framework: AppFramework,
+    pub risk_level: RiskLevel,
+}
+
+impl WaylandCompatibility {
+    /// Decode an 8-bit Wayland compatibility bitcode.
+    ///
+    /// # Bitcode Format
+    /// - Bits 0-1: Wayland Support (00=Unknown, 01=XWayland, 10=Native)
+    /// - Bits 2-5: Framework (0001=GTK3, 0010=GTK4, 0011=Qt5, 0100=Qt6, 0101=Electron, etc.)
+    /// - Bits 6-7: Risk Level (00=Low, 01=Medium, 10=High, 11=Critical)
+    ///
+    /// # Example Bitcodes
+    /// - 0x0A = GTK4 + Native + Low (GNOME apps)
+    /// - 0x06 = GTK3 + Native + Low (older GNOME apps)
+    /// - 0x52 = Qt6 + Native + Medium (modern KDE apps)
+    /// - 0x4E = Qt5 + Native + Medium (older KDE apps)
+    /// - 0x96 = Electron + Native + High (Electron apps)
+    /// - 0xC1 = X11-only + Critical (legacy apps)
+    pub fn decode_bitcode(bitcode: u8) -> Self {
+        // Bits 0-1: Wayland Support
+        let support = match bitcode & 0b00000011 {
+            0b00 => WaylandSupport::Unknown,
+            0b01 => WaylandSupport::Fallback, // XWayland -> Fallback
+            0b10 => WaylandSupport::Native,
+            _ => WaylandSupport::Unknown,
+        };
+
+        // Bits 2-5: Framework
+        let framework = match (bitcode >> 2) & 0b00001111 {
+            0x01 => AppFramework::GTK3,
+            0x02 => AppFramework::GTK4,
+            0x03 => AppFramework::Qt5,
+            0x04 => AppFramework::Qt6,
+            0x05 => AppFramework::Electron,
+            0x06 => AppFramework::QtWebEngine,
+            0x07 => AppFramework::Unknown, // SDL2 not in enum, use Unknown
+            _ => AppFramework::Unknown,
+        };
+
+        // Bits 6-7: Risk Level
+        let risk_level = match (bitcode >> 6) & 0b00000011 {
+            0b00 => RiskLevel::Low,
+            0b01 => RiskLevel::Medium,
+            0b10 => RiskLevel::High,
+            0b11 => RiskLevel::Critical,
+            _ => RiskLevel::Low,
+        };
+
+        WaylandCompatibility {
+            support,
+            framework,
+            risk_level,
+        }
+    }
+}
+
+#[cfg(test)]
+mod wayland_bitcode_tests {
+    use super::*;
+
+    #[test]
+    fn test_decode_gtk4_native_low() {
+        let compat = WaylandCompatibility::decode_bitcode(0x0A);
+        assert_eq!(compat.framework, AppFramework::GTK4);
+        assert_eq!(compat.support, WaylandSupport::Native);
+        assert_eq!(compat.risk_level, RiskLevel::Low);
+    }
+
+    #[test]
+    fn test_decode_gtk3_native_low() {
+        let compat = WaylandCompatibility::decode_bitcode(0x06);
+        assert_eq!(compat.framework, AppFramework::GTK3);
+        assert_eq!(compat.support, WaylandSupport::Native);
+        assert_eq!(compat.risk_level, RiskLevel::Low);
+    }
+
+    #[test]
+    fn test_decode_electron_native_high() {
+        let compat = WaylandCompatibility::decode_bitcode(0x96);
+        assert_eq!(compat.framework, AppFramework::Electron);
+        assert_eq!(compat.support, WaylandSupport::Native);
+        assert_eq!(compat.risk_level, RiskLevel::High);
+    }
+
+    #[test]
+    fn test_decode_qt6_native_medium() {
+        let compat = WaylandCompatibility::decode_bitcode(0x52);
+        assert_eq!(compat.framework, AppFramework::Qt6);
+        assert_eq!(compat.support, WaylandSupport::Native);
+        assert_eq!(compat.risk_level, RiskLevel::Medium);
+    }
+
+    #[test]
+    fn test_decode_qt5_native_medium() {
+        let compat = WaylandCompatibility::decode_bitcode(0x4E);
+        assert_eq!(compat.framework, AppFramework::Qt5);
+        assert_eq!(compat.support, WaylandSupport::Native);
+        assert_eq!(compat.risk_level, RiskLevel::Medium);
+    }
+
+    #[test]
+    fn test_decode_x11_only_critical() {
+        let compat = WaylandCompatibility::decode_bitcode(0xC1);
+        // 0xC1 = 11000001
+        // Bits 0-1: 01 = Fallback (XWayland)
+        // Bits 2-5: 0000 = Unknown
+        // Bits 6-7: 11 = Critical
+        assert_eq!(compat.framework, AppFramework::Unknown);
+        assert_eq!(compat.support, WaylandSupport::Fallback);
+        assert_eq!(compat.risk_level, RiskLevel::Critical);
+    }
+
+    #[test]
+    fn test_all_risk_levels() {
+        assert_eq!(WaylandCompatibility::decode_bitcode(0x0A).risk_level, RiskLevel::Low);
+        assert_eq!(WaylandCompatibility::decode_bitcode(0x52).risk_level, RiskLevel::Medium);
+        assert_eq!(WaylandCompatibility::decode_bitcode(0x96).risk_level, RiskLevel::High);
+        assert_eq!(WaylandCompatibility::decode_bitcode(0xC1).risk_level, RiskLevel::Critical);
+    }
+
+    #[test]
+    fn test_all_frameworks() {
+        // GTK3: 0x06 = 00000110 (bits 2-5 = 0001)
+        assert_eq!(WaylandCompatibility::decode_bitcode(0x06).framework, AppFramework::GTK3);
+
+        // GTK4: 0x0A = 00001010 (bits 2-5 = 0010)
+        assert_eq!(WaylandCompatibility::decode_bitcode(0x0A).framework, AppFramework::GTK4);
+
+        // Qt5: 0x0E = 00001110 (bits 2-5 = 0011)
+        assert_eq!(WaylandCompatibility::decode_bitcode(0x0E).framework, AppFramework::Qt5);
+
+        // Qt6: 0x12 = 00010010 (bits 2-5 = 0100)
+        assert_eq!(WaylandCompatibility::decode_bitcode(0x12).framework, AppFramework::Qt6);
+
+        // Electron: 0x16 = 00010110 (bits 2-5 = 0101)
+        assert_eq!(WaylandCompatibility::decode_bitcode(0x16).framework, AppFramework::Electron);
+    }
+
+    #[test]
+    fn test_all_support_levels() {
+        // Unknown: bits 0-1 = 00
+        let compat = WaylandCompatibility::decode_bitcode(0x00);
+        assert_eq!(compat.support, WaylandSupport::Unknown);
+
+        // Fallback (XWayland): bits 0-1 = 01
+        let compat = WaylandCompatibility::decode_bitcode(0x01);
+        assert_eq!(compat.support, WaylandSupport::Fallback);
+
+        // Native: bits 0-1 = 10
+        let compat = WaylandCompatibility::decode_bitcode(0x02);
+        assert_eq!(compat.support, WaylandSupport::Native);
+    }
+}
+
 #[derive(Clone, Debug, Default, Hash, Eq, PartialEq, bitcode::Decode, bitcode::Encode)]
 pub struct AppInfo {
     pub source_id: String,
@@ -166,6 +359,8 @@ pub struct AppInfo {
     pub screenshots: Vec<AppScreenshot>,
     pub urls: Vec<AppUrl>,
     pub monthly_downloads: u64,
+    pub verified: bool,
+    pub wayland_compat: Option<WaylandCompatibility>,
 }
 
 impl AppInfo {
@@ -176,6 +371,8 @@ impl AppInfo {
         component: Component,
         locale: &str,
         monthly_downloads: u64,
+        verified: bool,
+        wayland_compat: Option<WaylandCompatibility>,
     ) -> Self {
         let name = get_translatable(&component.name, locale);
         let summary = component
@@ -350,6 +547,7 @@ impl AppInfo {
             description,
             license_opt: component.project_license.map(|x| x.to_string()),
             pkgnames: component.pkgname.map_or(Vec::new(), |x| vec![x]),
+            package_paths: Vec::new(),
             categories,
             desktop_ids,
             flatpak_refs,
@@ -359,7 +557,76 @@ impl AppInfo {
             screenshots,
             urls,
             monthly_downloads,
-            ..Default::default()
+            verified,
+            wayland_compat,
         }
+    }
+
+    pub fn wayland_compat_lazy(&self) -> Option<WaylandCompatibility> {
+        if let Some(compat) = &self.wayland_compat {
+            return Some(compat.clone());
+        }
+
+        #[cfg(feature = "flatpak")]
+        {
+            use crate::backend::parse_flatpak_metadata;
+
+            if let Some(app_id_raw) = self.desktop_ids.first().or_else(|| self.flatpak_refs.first()) {
+                let app_id = app_id_raw.strip_suffix(".desktop").unwrap_or(app_id_raw);
+
+                if let Some(compat) = parse_flatpak_metadata(app_id, true)
+                    .or_else(|| parse_flatpak_metadata(app_id, false))
+                {
+                    return Some(compat);
+                }
+            }
+        }
+
+        if !self.flatpak_refs.is_empty() {
+            return self.heuristic_wayland_compat();
+        }
+
+        None
+    }
+
+    fn heuristic_wayland_compat(&self) -> Option<WaylandCompatibility> {
+        let categories_lower: Vec<String> = self.categories.iter()
+            .map(|c| c.to_lowercase())
+            .collect();
+
+        let name_lower = self.name.to_lowercase();
+        let dev_lower = self.developer_name.to_lowercase();
+
+        if categories_lower.iter().any(|c| c.contains("gnome") || c.contains("gtk"))
+            || dev_lower.contains("gnome")
+            || name_lower.contains("gnome")
+        {
+            return Some(WaylandCompatibility {
+                support: WaylandSupport::Native,
+                framework: AppFramework::GTK3,
+                risk_level: RiskLevel::Low,
+            });
+        }
+
+        if categories_lower.iter().any(|c| c.contains("kde") || c.contains("qt"))
+            || dev_lower.contains("kde")
+            || name_lower.contains("kde")
+        {
+            return Some(WaylandCompatibility {
+                support: WaylandSupport::Native,
+                framework: AppFramework::Qt6,
+                risk_level: RiskLevel::Medium,
+            });
+        }
+
+        if name_lower.contains("electron") || self.desktop_ids.iter().any(|id| id.to_lowercase().contains("electron")) {
+            return Some(WaylandCompatibility {
+                support: WaylandSupport::Native,
+                framework: AppFramework::Electron,
+                risk_level: RiskLevel::High,
+            });
+        }
+
+        None
     }
 }

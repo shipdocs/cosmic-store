@@ -3,16 +3,20 @@
 
 use clap::Parser;
 
-/// Format download count for display
-fn format_download_count(count: u64) -> String {
-    if count >= 1_000_000 {
-        format!("{:.1}M", count as f64 / 1_000_000.0)
-    } else if count >= 1_000 {
-        format!("{:.1}K", count as f64 / 1_000.0)
-    } else {
-        count.to_string()
-    }
-}
+mod constants;
+use constants::{ICON_SIZE_SEARCH, ICON_SIZE_PACKAGE, ICON_SIZE_DETAILS, MAX_GRID_WIDTH, MAX_RESULTS};
+
+mod utils;
+
+mod search;
+use search::{SearchResult, SearchSortMode, WaylandFilter};
+
+mod pages;
+use pages::{DialogPage, ContextPage, ExplorePage, NavPage};
+
+mod ui;
+use ui::{GridMetrics, package_card_view, styled_icon, wayland_compat_badge};
+
 use cosmic::{
     Application, ApplicationExt, Element, action,
     app::{Core, CosmicFlags, Settings, Task, context_drawer},
@@ -58,6 +62,29 @@ mod appstream_cache;
 
 use backend::{Backends, Package};
 mod backend;
+
+impl Package {
+    pub fn grid_metrics(spacing: &cosmic_theme::Spacing, width: usize) -> GridMetrics {
+        GridMetrics::new(width, 320 + 2 * spacing.space_s as usize, spacing.space_xxs)
+    }
+
+    pub fn card_view<'a>(
+        &'a self,
+        controls: Vec<Element<'a, Message>>,
+        top_controls: Option<Vec<Element<'a, Message>>>,
+        spacing: &cosmic_theme::Spacing,
+        width: usize,
+    ) -> Element<'a, Message> {
+        package_card_view(
+            &self.info,
+            Some(&self.icon),
+            controls,
+            top_controls,
+            spacing,
+            width,
+        )
+    }
+}
 
 use config::{AppTheme, CONFIG_VERSION, Config};
 mod config;

@@ -681,8 +681,12 @@ fn package_card_view<'a>(
     spacing: &cosmic_theme::Spacing,
     width: usize,
 ) -> Element<'a, Message> {
-    // Always show a compatibility badge - every app gets a status indicator
-    let compat_badge = wayland_compat_badge(info, 16);
+    // Only show compatibility badge for Flathub apps (only they have the data)
+    let compat_badge = if info.source_id == "flathub" {
+        wayland_compat_badge(info, 16)
+    } else {
+        None
+    };
 
     let mut name_row = vec![
         widget::text::body(&info.name)
@@ -932,7 +936,7 @@ impl SearchResult {
                         .height(Length::Fixed(28.0))
                         .into(),
                     widget::row::with_children(vec![
-                        if self.info.monthly_downloads > 0 {
+                        if self.info.source_id == "flathub" && self.info.monthly_downloads > 0 {
                             widget::tooltip(
                                 widget::text::caption(format_download_count(self.info.monthly_downloads)),
                                 widget::text(fl!("monthly-downloads-tooltip")),
@@ -2632,9 +2636,12 @@ impl App {
                 let mut title_row_children = vec![
                     widget::text::title2(&selected.info.name).into(),
                 ];
-                if let Some(badge) = wayland_compat_badge(&selected.info, 24) {
-                    title_row_children.push(widget::Space::with_width(Length::Fixed(space_xs.into())).into());
-                    title_row_children.push(badge);
+                // Only show Wayland compatibility badge for Flathub apps
+                if selected.info.source_id == "flathub" {
+                    if let Some(badge) = wayland_compat_badge(&selected.info, 24) {
+                        title_row_children.push(widget::Space::with_width(Length::Fixed(space_xs.into())).into());
+                        title_row_children.push(badge);
+                    }
                 }
 
                 column = column.push(
@@ -2686,7 +2693,7 @@ impl App {
                 ])
                 .align_x(Alignment::Center)
                 .width(Length::Fill);
-                let downloads_widget = (selected.info.monthly_downloads > 0).then(|| {
+                let downloads_widget = (selected.info.source_id == "flathub" && selected.info.monthly_downloads > 0).then(|| {
                     widget::column::with_children(vec![
                         widget::text::heading(selected.info.monthly_downloads.to_string()).into(),
                         //TODO: description of what this means?
@@ -2792,49 +2799,51 @@ impl App {
                 }
                 column = column.push(widget::text::body(&selected.info.description));
 
-                // Add compatibility warning banner if needed
-                if let Some(compat) = selected.info.wayland_compat_lazy() {
-                    if compat.risk_level == RiskLevel::Critical || compat.risk_level == RiskLevel::High {
-                        let (title, description, icon_name) = if matches!(compat.support, WaylandSupport::X11Only) {
-                            (
-                                fl!("compatibility-warning"),
-                                fl!("x11-only-description"),
-                                "dialog-warning-symbolic"
-                            )
-                        } else {
-                            let framework_name = match compat.framework {
-                                AppFramework::QtWebEngine => fl!("framework-qtwebengine"),
-                                AppFramework::Electron => fl!("framework-electron"),
-                                _ => fl!("wayland-issues-warning"),
+                // Add compatibility warning banner if needed (only for Flathub apps)
+                if selected.info.source_id == "flathub" {
+                    if let Some(compat) = selected.info.wayland_compat_lazy() {
+                        if compat.risk_level == RiskLevel::Critical || compat.risk_level == RiskLevel::High {
+                            let (title, description, icon_name) = if matches!(compat.support, WaylandSupport::X11Only) {
+                                (
+                                    fl!("compatibility-warning"),
+                                    fl!("x11-only-description"),
+                                    "dialog-warning-symbolic"
+                                )
+                            } else {
+                                let framework_name = match compat.framework {
+                                    AppFramework::QtWebEngine => fl!("framework-qtwebengine"),
+                                    AppFramework::Electron => fl!("framework-electron"),
+                                    _ => fl!("wayland-issues-warning"),
+                                };
+                                (
+                                    fl!("wayland-issues-warning"),
+                                    fl!("wayland-issues-description", framework = framework_name),
+                                    "dialog-warning-symbolic"
+                                )
                             };
-                            (
-                                fl!("wayland-issues-warning"),
-                                fl!("wayland-issues-description", framework = framework_name),
-                                "dialog-warning-symbolic"
-                            )
-                        };
 
-                        let warning_container = widget::container(
-                            widget::column::with_children(vec![
-                                widget::row::with_children(vec![
-                                    widget::icon::from_name(icon_name)
-                                        .size(24)
-                                        .into(),
-                                    widget::text::heading(title)
-                                        .width(Length::Fill)
-                                        .into(),
+                            let warning_container = widget::container(
+                                widget::column::with_children(vec![
+                                    widget::row::with_children(vec![
+                                        widget::icon::from_name(icon_name)
+                                            .size(24)
+                                            .into(),
+                                        widget::text::heading(title)
+                                            .width(Length::Fill)
+                                            .into(),
+                                    ])
+                                    .spacing(space_s)
+                                    .into(),
+                                    widget::text::body(description).into(),
                                 ])
-                                .spacing(space_s)
-                                .into(),
-                                widget::text::body(description).into(),
-                            ])
-                            .spacing(space_xxs)
-                        )
-                        .padding(space_s)
-                        .class(theme::Container::Card);
+                                .spacing(space_xxs)
+                            )
+                            .padding(space_s)
+                            .class(theme::Container::Card);
 
-                        column = column.push(warning_container);
-                        column = column.push(widget::Space::with_height(Length::Fixed(space_s.into())));
+                            column = column.push(warning_container);
+                            column = column.push(widget::Space::with_height(Length::Fixed(space_s.into())));
+                        }
                     }
                 }
 

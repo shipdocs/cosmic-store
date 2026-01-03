@@ -1,5 +1,6 @@
 use std::{collections::HashMap, error::Error, fs};
 
+use chrono::{Datelike, Duration, Utc};
 use app_id::AppId;
 #[path = "../../src/app_id.rs"]
 mod app_id;
@@ -53,7 +54,12 @@ struct FlathubStats {
 async fn stats(year: u16, month: u8, day: u8) -> Result<Stats, Box<dyn Error>> {
     let url = format!("https://flathub.org/stats/{year}/{month:02}/{day:02}.json");
     println!("Downloading stats from {}", url);
-    let body = reqwest::get(url).await?.text().await?;
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()?;
+
+    let body = client.get(&url).send().await?.text().await?;
     let stats = serde_json::from_str::<Stats>(&body)?;
     Ok(stats)
 }
@@ -65,13 +71,17 @@ fn leap_year(year: u16) -> bool {
 async fn fetch_manifest(app_id: &str) -> Result<serde_json::Value, Box<dyn Error>> {
     let branches = ["master", "main", "stable"];
 
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .build()?;
+
     for branch in branches {
         let url = format!(
             "https://raw.githubusercontent.com/flathub/{}/{}/{}.json",
             app_id, branch, app_id
         );
 
-        match reqwest::get(&url).await {
+        match client.get(&url).send().await {
             Ok(response) if response.status().is_success() => {
                 let manifest = response.json().await?;
                 return Ok(manifest);
@@ -142,7 +152,8 @@ fn detect_framework(manifest: &serde_json::Value) -> AppFramework {
         return AppFramework::Qt5;
     }
 
-    if manifest_str.contains("gtk-4") || manifest_str.contains("gnome-44") || manifest_str.contains("gnome-45") || manifest_str.contains("gnome-46") {
+    // GTK4 is used by GNOME 40+ (check for gtk-4 or gnome-4x pattern)
+    if manifest_str.contains("gtk-4") || manifest_str.contains("gnome-4") {
         return AppFramework::GTK4;
     }
     if manifest_str.contains("gtk-3") || manifest_str.contains("gnome-3") {
@@ -171,8 +182,10 @@ fn calculate_risk_level(support: WaylandSupport, framework: AppFramework) -> Ris
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    let year = 2025;
-    let month = 9;
+    // Use previous month's stats (current month data is incomplete)
+    let last_month = Utc::now() - Duration::days(30);
+    let year = last_month.year() as u16;
+    let month = last_month.month() as u8;
 
     let days = match month {
         1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
@@ -189,16 +202,24 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     println!("Fetching download stats for {}/{}...", year, month);
     let mut ref_downloads = HashMap::<AppId, u64>::new();
+    let mut days_fetched = 0;
     for day in 1..=days {
-        let stats = stats(year, month, day).await?;
-        for (r, archs) in stats.refs {
-            for (_arch, (downloads, _updates)) in archs {
-                let id = r.split('/').next().unwrap();
-                *ref_downloads.entry(AppId::new(&id)).or_insert(0) += downloads;
+        match stats(year, month, day).await {
+            Ok(stats) => {
+                days_fetched += 1;
+                for (r, archs) in stats.refs {
+                    for (_arch, (downloads, _updates)) in archs {
+                        let id = r.split('/').next().unwrap();
+                        *ref_downloads.entry(AppId::new(id)).or_insert(0) += downloads;
+                    }
+                }
+            }
+            Err(e) => {
+                eprintln!("Warning: Failed to fetch stats for {}/{}/{}: {}", year, month, day, e);
             }
         }
     }
-    println!("Fetched stats for {} unique apps", ref_downloads.len());
+    println!("Fetched stats for {} unique apps ({}/{} days)", ref_downloads.len(), days_fetched, days);
 
     println!("Fetching compatibility data for {} apps...", ref_downloads.len());
     let mut compatibility_data = HashMap::<AppId, WaylandCompatibility>::new();
@@ -219,7 +240,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     println!("Processed {}/{} apps...", successful, ref_downloads.len());
                 }
             }
-            Err(e) => {
+            Err(_) => {
                 failed += 1;
             }
         }
@@ -235,6 +256,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
     };
 
     let bitcode = bitcode::encode(&stats);
+
+    // Ensure res directory exists
+    fs::create_dir_all("../res")?;
     fs::write("../res/flathub-stats.bitcode-v0-7", &bitcode)?;
 
     println!("Saved to ../res/flathub-stats.bitcode-v0-7");

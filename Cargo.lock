@@ -1894,6 +1894,7 @@ name = "flathub-stats"
 version = "0.1.0"
 dependencies = [
  "bitcode",
+ "chrono",
  "reqwest",
  "serde",
  "serde_json",

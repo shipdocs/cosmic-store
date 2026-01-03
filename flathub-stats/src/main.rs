@@ -235,9 +235,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
     };
 
     let bitcode = bitcode::encode(&stats);
-    fs::write("res/flathub-stats.bitcode-v0-7", &bitcode)?;
+    fs::write("../res/flathub-stats.bitcode-v0-7", &bitcode)?;
 
-    println!("Saved to res/flathub-stats.bitcode-v0-7");
+    println!("Saved to ../res/flathub-stats.bitcode-v0-7");
 
     Ok(())
 }

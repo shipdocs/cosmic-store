@@ -1071,7 +1071,7 @@ impl App {
                             let mat = regex.find(string)?;
                             if mat.range().start == 0 {
                                 if mat.range().end == string.len() {
-                                    Some(stats_weight(weight + 0))
+                                    Some(stats_weight(weight))
                                 } else {
                                     Some(stats_weight(weight + 1))
                                 }
@@ -2850,7 +2850,7 @@ impl App {
             column = column.push(addon_col);
         }
 
-        for release in selected.info.releases.iter() {
+        if let Some(release) = selected.info.releases.first() {
             let mut release_col = widget::column::with_capacity(2).spacing(space_xxxs);
             release_col = release_col.push(widget::text::title4(fl!(
                 "version",
@@ -2870,7 +2870,6 @@ impl App {
             }
             column = column.push(release_col);
             //TODO: show more releases, or make sure this is the latest?
-            break;
         }
 
         if let Some(license) = &selected.info.license_opt {
@@ -3220,7 +3219,7 @@ impl App {
                                 widget::button::standard(fl!("update"))
                                     .on_press(Message::Operation(
                                         OperationKind::Update,
-                                        *backend_name,
+                                        backend_name,
                                         package.id.clone(),
                                         package.info.clone(),
                                     ))
@@ -3578,33 +3577,6 @@ impl Application for App {
 
     /// Handle application events here.
     fn update(&mut self, message: Self::Message) -> Task<Message> {
-        // Helper for updating config values efficiently
-        macro_rules! config_set {
-            ($name: ident, $value: expr) => {
-                match &self.config_handler {
-                    Some(config_handler) => {
-                        match paste::paste! { self.config.[<set_ $name>](config_handler, $value) } {
-                            Ok(_) => {}
-                            Err(err) => {
-                                log::warn!(
-                                    "failed to save config {:?}: {}",
-                                    stringify!($name),
-                                    err
-                                );
-                            }
-                        }
-                    }
-                    None => {
-                        self.config.$name = $value;
-                        log::warn!(
-                            "failed to save config {:?}: no config handler",
-                            stringify!($name)
-                        );
-                    }
-                }
-            };
-        }
-
         match message {
             Message::AppTheme(_) | Message::Config(_) | Message::SystemThemeModeChange(_) => {
                 return self.handle_config_message(message);

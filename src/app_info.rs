@@ -564,7 +564,7 @@ impl AppInfo {
 
     pub fn wayland_compat_lazy(&self) -> Option<WaylandCompatibility> {
         if let Some(compat) = &self.wayland_compat {
-            return Some(compat.clone());
+            return Some(*compat);
         }
 
         #[cfg(feature = "flatpak")]

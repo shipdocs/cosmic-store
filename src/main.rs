@@ -593,31 +593,46 @@ impl GridMetrics {
     }
 }
 
+// Helper function to create a styled badge icon
+fn styled_badge_icon<'a>(
+    icon_name: &'static str,
+    icon_size: u16,
+    icon_color: cosmic::iced::Color,
+    _bg_color: cosmic::iced::Color,
+) -> Element<'a, Message> {
+    widget::icon::icon(icon_cache_handle(icon_name, icon_size))
+        .size(icon_size)
+        .class(cosmic::theme::Svg::Custom(std::rc::Rc::new(move |_theme| {
+            cosmic::iced::widget::svg::Style {
+                color: Some(icon_color),
+            }
+        })))
+        .into()
+}
+
 fn wayland_compat_badge<'a>(info: &'a AppInfo, icon_size: u16) -> Option<Element<'a, Message>> {
     let compat_badge = if let Some(compat) = info.wayland_compat_lazy() {
         match compat.risk_level {
             RiskLevel::Low => {
                 Some(widget::tooltip(
-                    widget::icon::icon(icon_cache_handle("emblem-ok-symbolic", icon_size))
-                        .size(icon_size)
-                        .class(cosmic::theme::Svg::Custom(std::rc::Rc::new(|_theme| {
-                            cosmic::iced::widget::svg::Style {
-                                color: Some(cosmic::iced::Color::from_rgb(0.2, 0.8, 0.3)),
-                            }
-                        }))),
+                    styled_badge_icon(
+                        "checkbox-checked-symbolic",
+                        icon_size,
+                        cosmic::iced::Color::from_rgb(0.15, 0.75, 0.3),
+                        cosmic::iced::Color::from_rgba(0.15, 0.75, 0.3, 0.2),
+                    ),
                     widget::text::caption(fl!("wayland-native-tooltip")),
                     widget::tooltip::Position::Bottom,
                 ))
             }
             RiskLevel::Medium => {
                 Some(widget::tooltip(
-                    widget::icon::icon(icon_cache_handle("dialog-information-symbolic", icon_size))
-                        .size(icon_size)
-                        .class(cosmic::theme::Svg::Custom(std::rc::Rc::new(|_theme| {
-                            cosmic::iced::widget::svg::Style {
-                                color: Some(cosmic::iced::Color::from_rgb(0.2, 0.6, 0.8)),
-                            }
-                        }))),
+                    styled_badge_icon(
+                        "dialog-information-symbolic",
+                        icon_size,
+                        cosmic::iced::Color::from_rgb(0.2, 0.6, 0.85),
+                        cosmic::iced::Color::from_rgba(0.2, 0.6, 0.85, 0.2),
+                    ),
                     widget::text::caption(format!("{:?} - Good Wayland support", compat.framework)),
                     widget::tooltip::Position::Bottom,
                 ))
@@ -630,13 +645,12 @@ fn wayland_compat_badge<'a>(info: &'a AppInfo, icon_size: u16) -> Option<Element
                 };
 
                 Some(widget::tooltip(
-                    widget::icon::icon(icon_cache_handle("dialog-warning-symbolic", icon_size))
-                        .size(icon_size)
-                        .class(cosmic::theme::Svg::Custom(std::rc::Rc::new(|_theme| {
-                            cosmic::iced::widget::svg::Style {
-                                color: Some(cosmic::iced::Color::from_rgb(1.0, 0.5, 0.0)),
-                            }
-                        }))),
+                    styled_badge_icon(
+                        "dialog-warning-symbolic",
+                        icon_size,
+                        cosmic::iced::Color::from_rgb(1.0, 0.55, 0.0),
+                        cosmic::iced::Color::from_rgba(1.0, 0.55, 0.0, 0.2),
+                    ),
                     widget::text::caption(tooltip_text),
                     widget::tooltip::Position::Bottom,
                 ))
@@ -644,13 +658,12 @@ fn wayland_compat_badge<'a>(info: &'a AppInfo, icon_size: u16) -> Option<Element
             RiskLevel::Critical => {
                 let tooltip_text = fl!("x11-only-tooltip");
                 Some(widget::tooltip(
-                    widget::icon::icon(icon_cache_handle("dialog-warning-symbolic", icon_size))
-                        .size(icon_size)
-                        .class(cosmic::theme::Svg::Custom(std::rc::Rc::new(|_theme| {
-                            cosmic::iced::widget::svg::Style {
-                                color: Some(cosmic::iced::Color::from_rgb(1.0, 0.3, 0.3)),
-                            }
-                        }))),
+                    styled_badge_icon(
+                        "dialog-warning-symbolic",
+                        icon_size,
+                        cosmic::iced::Color::from_rgb(1.0, 0.3, 0.3),
+                        cosmic::iced::Color::from_rgba(1.0, 0.3, 0.3, 0.2),
+                    ),
                     widget::text::caption(tooltip_text),
                     widget::tooltip::Position::Bottom,
                 ))
@@ -658,19 +671,58 @@ fn wayland_compat_badge<'a>(info: &'a AppInfo, icon_size: u16) -> Option<Element
         }
     } else {
         Some(widget::tooltip(
-            widget::icon::icon(icon_cache_handle("dialog-question-symbolic", icon_size))
-                .size(icon_size)
-                .class(cosmic::theme::Svg::Custom(std::rc::Rc::new(|_theme| {
-                    cosmic::iced::widget::svg::Style {
-                        color: Some(cosmic::iced::Color::from_rgb(0.5, 0.5, 0.5)),
-                    }
-                }))),
+            styled_badge_icon(
+                "dialog-question-symbolic",
+                icon_size,
+                cosmic::iced::Color::from_rgb(0.5, 0.5, 0.5),
+                cosmic::iced::Color::from_rgba(0.5, 0.5, 0.5, 0.15),
+            ),
             widget::text::caption("Wayland compatibility unknown"),
             widget::tooltip::Position::Bottom,
         ))
     };
 
     compat_badge.map(|badge| badge.into())
+}
+
+// Helper function to create a styled icon container with rounded corners
+fn styled_icon<'a>(icon: widget::icon::Handle, size: u16) -> Element<'a, Message> {
+    use cosmic::iced::{Border, Color};
+
+    widget::container(
+        widget::icon::icon(icon)
+            .size(size)
+    )
+    .padding(8)
+    .class(theme::Container::custom(move |theme| {
+        let cosmic = theme.cosmic();
+
+        // Use a slightly elevated background for better contrast
+        let base_color = cosmic.background.component.base;
+        let bg_color = Color::from_rgba(
+            (base_color.red + 0.05).min(1.0),
+            (base_color.green + 0.05).min(1.0),
+            (base_color.blue + 0.05).min(1.0),
+            base_color.alpha,
+        );
+
+        widget::container::Style {
+            icon_color: Some(cosmic.on_bg_color().into()),
+            text_color: Some(cosmic.on_bg_color().into()),
+            background: Some(bg_color.into()),
+            border: Border {
+                radius: ((size + 16) as f32 * 0.25).into(), // Larger radius accounting for padding
+                width: 1.0,
+                color: Color::from_rgba(0.0, 0.0, 0.0, 0.05),
+            },
+            shadow: cosmic::iced::Shadow {
+                color: Color::from_rgba(0.0, 0.0, 0.0, 0.15),
+                offset: cosmic::iced::Vector::new(0.0, 3.0),
+                blur_radius: 8.0,
+            },
+        }
+    }))
+    .into()
 }
 
 fn package_card_view<'a>(
@@ -726,9 +778,7 @@ fn package_card_view<'a>(
     ]);
 
     let icon: Element<_> = match icon_opt {
-        Some(icon) => widget::icon::icon(icon.clone())
-            .size(ICON_SIZE_PACKAGE)
-            .into(),
+        Some(icon) => styled_icon(icon.clone(), ICON_SIZE_PACKAGE),
         None => widget::Space::with_width(ICON_SIZE_PACKAGE as f32).into(),
     };
 
@@ -827,86 +877,7 @@ impl SearchResult {
         let is_verified = self.info.verified;
 
         // Always show a compatibility badge - every app gets a status indicator
-        let compat_badge = if let Some(compat) = self.info.wayland_compat_lazy() {
-            match compat.risk_level {
-                // Green checkmark for low risk (GTK3/GTK4 native)
-                RiskLevel::Low => {
-                    Some(widget::tooltip(
-                        widget::icon::icon(icon_cache_handle("emblem-ok-symbolic", 16))
-                            .size(16)
-                            .class(cosmic::theme::Svg::Custom(std::rc::Rc::new(|_theme| {
-                                cosmic::iced::widget::svg::Style {
-                                    color: Some(cosmic::iced::Color::from_rgb(0.2, 0.8, 0.3)),
-                                }
-                            }))),
-                        widget::text::caption(fl!("wayland-native-tooltip")),
-                        widget::tooltip::Position::Bottom,
-                    ))
-                }
-                // Blue/teal info icon for medium risk (Qt5/Qt6 native)
-                RiskLevel::Medium => {
-                    Some(widget::tooltip(
-                        widget::icon::icon(icon_cache_handle("dialog-information-symbolic", 16))
-                            .size(16)
-                            .class(cosmic::theme::Svg::Custom(std::rc::Rc::new(|_theme| {
-                                cosmic::iced::widget::svg::Style {
-                                    color: Some(cosmic::iced::Color::from_rgb(0.2, 0.6, 0.8)),
-                                }
-                            }))),
-                        widget::text::caption(format!("{:?} - Good Wayland support", compat.framework)),
-                        widget::tooltip::Position::Bottom,
-                    ))
-                }
-                // Orange warning for high risk (Electron, known issues)
-                RiskLevel::High => {
-                    let tooltip_text = if matches!(compat.support, WaylandSupport::X11Only) {
-                        fl!("x11-only-tooltip")
-                    } else {
-                        fl!("wayland-issues-warning")
-                    };
-
-                    Some(widget::tooltip(
-                        widget::icon::icon(icon_cache_handle("dialog-warning-symbolic", 16))
-                            .size(16)
-                            .class(cosmic::theme::Svg::Custom(std::rc::Rc::new(|_theme| {
-                                cosmic::iced::widget::svg::Style {
-                                    color: Some(cosmic::iced::Color::from_rgb(1.0, 0.5, 0.0)),
-                                }
-                            }))),
-                        widget::text::caption(tooltip_text),
-                        widget::tooltip::Position::Bottom,
-                    ))
-                }
-                // Red warning for critical risk (X11-only)
-                RiskLevel::Critical => {
-                    let tooltip_text = fl!("x11-only-tooltip");
-                    Some(widget::tooltip(
-                        widget::icon::icon(icon_cache_handle("dialog-warning-symbolic", 16))
-                            .size(16)
-                            .class(cosmic::theme::Svg::Custom(std::rc::Rc::new(|_theme| {
-                                cosmic::iced::widget::svg::Style {
-                                    color: Some(cosmic::iced::Color::from_rgb(1.0, 0.3, 0.3)),
-                                }
-                            }))),
-                        widget::text::caption(tooltip_text),
-                        widget::tooltip::Position::Bottom,
-                    ))
-                }
-            }
-        } else {
-            // Gray question mark for unknown compatibility (no bitcode data)
-            Some(widget::tooltip(
-                widget::icon::icon(icon_cache_handle("dialog-question-symbolic", 16))
-                    .size(16)
-                    .class(cosmic::theme::Svg::Custom(std::rc::Rc::new(|_theme| {
-                        cosmic::iced::widget::svg::Style {
-                            color: Some(cosmic::iced::Color::from_rgb(0.5, 0.5, 0.5)),
-                        }
-                    }))),
-                widget::text::caption("Wayland compatibility unknown"),
-                widget::tooltip::Position::Bottom,
-            ))
-        };
+        let compat_badge = wayland_compat_badge(&self.info, 16);
 
         let mut name_row = vec![];
         name_row.push(widget::text::body(&self.info.name)
@@ -921,9 +892,7 @@ impl SearchResult {
         widget::container(
             widget::row::with_children(vec![
                 match &self.icon_opt {
-                    Some(icon) => widget::icon::icon(icon.clone())
-                        .size(ICON_SIZE_SEARCH)
-                        .into(),
+                    Some(icon) => styled_icon(icon.clone(), ICON_SIZE_SEARCH),
                     None => {
                         widget::Space::with_width(Length::Fixed(ICON_SIZE_SEARCH as f32)).into()
                     }
@@ -2647,9 +2616,7 @@ impl App {
                 column = column.push(
                     widget::row::with_children(vec![
                         match &selected.icon_opt {
-                            Some(icon) => widget::icon::icon(icon.clone())
-                                .size(ICON_SIZE_DETAILS)
-                                .into(),
+                            Some(icon) => styled_icon(icon.clone(), ICON_SIZE_DETAILS),
                             None => {
                                 widget::Space::with_width(Length::Fixed(ICON_SIZE_DETAILS as f32))
                                     .into()

@@ -4,7 +4,7 @@
 use clap::Parser;
 
 mod constants;
-use constants::{ICON_SIZE_SEARCH, ICON_SIZE_PACKAGE, ICON_SIZE_DETAILS, MAX_GRID_WIDTH, MAX_RESULTS};
+use constants::{ICON_SIZE_DETAILS, MAX_GRID_WIDTH, MAX_RESULTS};
 
 mod utils;
 
@@ -54,7 +54,9 @@ use std::{
 use app_id::AppId;
 mod app_id;
 
-use app_info::{AppIcon, AppInfo, AppKind, AppProvide, AppUrl, WaylandSupport, AppFramework, RiskLevel};
+use app_info::{
+    AppIcon, AppInfo, AppKind, AppProvide, AppUrl, WaylandSupport, AppFramework, RiskLevel,
+};
 mod app_info;
 
 use appstream_cache::AppstreamCache;
@@ -62,29 +64,6 @@ mod appstream_cache;
 
 use backend::{Backends, Package};
 mod backend;
-
-impl Package {
-    pub fn grid_metrics(spacing: &cosmic_theme::Spacing, width: usize) -> GridMetrics {
-        GridMetrics::new(width, 320 + 2 * spacing.space_s as usize, spacing.space_xxs)
-    }
-
-    pub fn card_view<'a>(
-        &'a self,
-        controls: Vec<Element<'a, Message>>,
-        top_controls: Option<Vec<Element<'a, Message>>>,
-        spacing: &cosmic_theme::Spacing,
-        width: usize,
-    ) -> Element<'a, Message> {
-        package_card_view(
-            &self.info,
-            Some(&self.icon),
-            controls,
-            top_controls,
-            spacing,
-            width,
-        )
-    }
-}
 
 use config::{AppTheme, CONFIG_VERSION, Config};
 mod config;
@@ -98,7 +77,7 @@ mod editors_choice;
 use gstreamer::GStreamerCodec;
 mod gstreamer;
 
-use icon_cache::{icon_cache_handle, icon_cache_icon};
+use icon_cache::icon_cache_handle;
 mod icon_cache;
 
 use key_bind::{KeyBind, key_binds};
@@ -119,12 +98,6 @@ use priority::priority;
 mod priority;
 
 mod stats;
-
-const ICON_SIZE_SEARCH: u16 = 48;
-const ICON_SIZE_PACKAGE: u16 = 64;
-const ICON_SIZE_DETAILS: u16 = 128;
-const MAX_GRID_WIDTH: f32 = 1600.0;
-const MAX_RESULTS: usize = 100;
 
 #[derive(Debug, Default, Parser)]
 struct Cli {
@@ -204,24 +177,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Action {
     SearchActivate,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum SearchSortMode {
-    Relevance,
-    MostDownloads,
-    RecentlyUpdated,
-    BestWaylandSupport,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum WaylandFilter {
-    All,
-    Excellent,  // Low risk
-    Good,       // Medium risk
-    Caution,    // High risk
-    Limited,    // Critical risk
-    Unknown,    // No data
 }
 
 impl Action {
@@ -385,23 +340,6 @@ pub enum Message {
     PlaceApplet(AppId),
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum ContextPage {
-    Operations,
-    ReleaseNotes(usize, String),
-    Repositories,
-    Settings,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum DialogPage {
-    FailedOperation(u64),
-    RepositoryAddError(String),
-    RepositoryRemove(&'static str, RepositoryRemoveError),
-    Uninstall(&'static str, AppId, Arc<AppInfo>),
-    Place(AppId),
-}
-
 // From https://specifications.freedesktop.org/menu-spec/latest/apa.html
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Category {
@@ -438,392 +376,6 @@ impl Category {
     }
 }
 
-#[derive(Clone, Copy, Default, Debug, Eq, PartialEq)]
-pub enum NavPage {
-    #[default]
-    Explore,
-    Create,
-    Work,
-    Develop,
-    Learn,
-    Game,
-    Relax,
-    Socialize,
-    Utilities,
-    Applets,
-    Installed,
-    Updates,
-}
-
-impl NavPage {
-    fn all() -> &'static [Self] {
-        &[
-            Self::Explore,
-            Self::Create,
-            Self::Work,
-            Self::Develop,
-            Self::Learn,
-            Self::Game,
-            Self::Relax,
-            Self::Socialize,
-            Self::Utilities,
-            Self::Applets,
-            Self::Installed,
-            Self::Updates,
-        ]
-    }
-
-    fn title(&self) -> String {
-        match self {
-            Self::Explore => fl!("explore"),
-            Self::Create => fl!("create"),
-            Self::Work => fl!("work"),
-            Self::Develop => fl!("develop"),
-            Self::Learn => fl!("learn"),
-            Self::Game => fl!("game"),
-            Self::Relax => fl!("relax"),
-            Self::Socialize => fl!("socialize"),
-            Self::Utilities => fl!("utilities"),
-            Self::Applets => fl!("applets"),
-            Self::Installed => fl!("installed-apps"),
-            Self::Updates => fl!("updates"),
-        }
-    }
-
-    // From https://specifications.freedesktop.org/menu-spec/latest/apa.html
-    fn categories(&self) -> Option<&'static [Category]> {
-        match self {
-            Self::Create => Some(&[Category::AudioVideo, Category::Graphics]),
-            Self::Work => Some(&[Category::Development, Category::Office, Category::Science]),
-            Self::Develop => Some(&[Category::Development]),
-            Self::Learn => Some(&[Category::Education]),
-            Self::Game => Some(&[Category::Game]),
-            Self::Relax => Some(&[Category::AudioVideo]),
-            Self::Socialize => Some(&[Category::Network]),
-            Self::Utilities => Some(&[Category::Settings, Category::System, Category::Utility]),
-            Self::Applets => Some(&[Category::CosmicApplet]),
-            _ => None,
-        }
-    }
-
-    fn icon(&self) -> widget::icon::Icon {
-        match self {
-            Self::Explore => icon_cache_icon("store-home-symbolic", 16),
-            Self::Create => icon_cache_icon("store-create-symbolic", 16),
-            Self::Work => icon_cache_icon("store-work-symbolic", 16),
-            Self::Develop => icon_cache_icon("store-develop-symbolic", 16),
-            Self::Learn => icon_cache_icon("store-learn-symbolic", 16),
-            Self::Game => icon_cache_icon("store-game-symbolic", 16),
-            Self::Relax => icon_cache_icon("store-relax-symbolic", 16),
-            Self::Socialize => icon_cache_icon("store-socialize-symbolic", 16),
-            Self::Utilities => icon_cache_icon("store-utilities-symbolic", 16),
-            Self::Applets => icon_cache_icon("store-applets-symbolic", 16),
-            Self::Installed => icon_cache_icon("store-installed-symbolic", 16),
-            Self::Updates => icon_cache_icon("store-updates-symbolic", 16),
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
-pub enum ExplorePage {
-    EditorsChoice,
-    PopularApps,
-    MadeForCosmic,
-    NewApps,
-    RecentlyUpdated,
-    DevelopmentTools,
-    ScientificTools,
-    ProductivityApps,
-    GraphicsAndPhotographyTools,
-    SocialNetworkingApps,
-    Games,
-    MusicAndVideoApps,
-    AppsForLearning,
-    Utilities,
-}
-
-impl ExplorePage {
-    fn all() -> &'static [Self] {
-        &[
-            Self::EditorsChoice,
-            Self::PopularApps,
-            Self::MadeForCosmic,
-            //TODO: Self::NewApps,
-            Self::RecentlyUpdated,
-            Self::DevelopmentTools,
-            Self::ScientificTools,
-            Self::ProductivityApps,
-            Self::GraphicsAndPhotographyTools,
-            Self::SocialNetworkingApps,
-            Self::Games,
-            Self::MusicAndVideoApps,
-            Self::AppsForLearning,
-            Self::Utilities,
-        ]
-    }
-
-    fn title(&self) -> String {
-        match self {
-            Self::EditorsChoice => fl!("editors-choice"),
-            Self::PopularApps => fl!("popular-apps"),
-            Self::MadeForCosmic => fl!("made-for-cosmic"),
-            Self::NewApps => fl!("new-apps"),
-            Self::RecentlyUpdated => fl!("recently-updated"),
-            Self::DevelopmentTools => fl!("development-tools"),
-            Self::ScientificTools => fl!("scientific-tools"),
-            Self::ProductivityApps => fl!("productivity-apps"),
-            Self::GraphicsAndPhotographyTools => fl!("graphics-and-photography-tools"),
-            Self::SocialNetworkingApps => fl!("social-networking-apps"),
-            Self::Games => fl!("games"),
-            Self::MusicAndVideoApps => fl!("music-and-video-apps"),
-            Self::AppsForLearning => fl!("apps-for-learning"),
-            Self::Utilities => fl!("utilities"),
-        }
-    }
-
-    fn categories(&self) -> &'static [Category] {
-        match self {
-            Self::DevelopmentTools => &[Category::Development],
-            Self::ScientificTools => &[Category::Science],
-            Self::ProductivityApps => &[Category::Office],
-            Self::GraphicsAndPhotographyTools => &[Category::Graphics],
-            Self::SocialNetworkingApps => &[Category::Network],
-            Self::Games => &[Category::Game],
-            Self::MusicAndVideoApps => &[Category::AudioVideo],
-            Self::AppsForLearning => &[Category::Education],
-            Self::Utilities => &[Category::Settings, Category::System, Category::Utility],
-            _ => &[],
-        }
-    }
-}
-
-pub struct GridMetrics {
-    pub cols: usize,
-    pub item_width: usize,
-    pub column_spacing: u16,
-}
-
-impl GridMetrics {
-    pub fn new(width: usize, min_width: usize, column_spacing: u16) -> Self {
-        let width_m1 = width.saturating_sub(min_width);
-        let cols_m1 = width_m1 / (min_width + column_spacing as usize);
-        let cols = cols_m1 + 1;
-        let item_width = width
-            .saturating_sub(cols_m1 * column_spacing as usize)
-            .checked_div(cols)
-            .unwrap_or(0);
-        Self {
-            cols,
-            item_width,
-            column_spacing,
-        }
-    }
-}
-
-// Helper function to create a styled badge icon
-fn styled_badge_icon<'a>(
-    icon_name: &'static str,
-    icon_size: u16,
-    icon_color: cosmic::iced::Color,
-    _bg_color: cosmic::iced::Color,
-) -> Element<'a, Message> {
-    widget::icon::icon(icon_cache_handle(icon_name, icon_size))
-        .size(icon_size)
-        .class(cosmic::theme::Svg::Custom(std::rc::Rc::new(move |_theme| {
-            cosmic::iced::widget::svg::Style {
-                color: Some(icon_color),
-            }
-        })))
-        .into()
-}
-
-fn wayland_compat_badge<'a>(info: &'a AppInfo, icon_size: u16) -> Option<Element<'a, Message>> {
-    let compat_badge = if let Some(compat) = info.wayland_compat_lazy() {
-        match compat.risk_level {
-            RiskLevel::Low => {
-                Some(widget::tooltip(
-                    styled_badge_icon(
-                        "checkbox-checked-symbolic",
-                        icon_size,
-                        cosmic::iced::Color::from_rgb(0.15, 0.75, 0.3),
-                        cosmic::iced::Color::from_rgba(0.15, 0.75, 0.3, 0.2),
-                    ),
-                    widget::text::caption(fl!("wayland-native-tooltip")),
-                    widget::tooltip::Position::Bottom,
-                ))
-            }
-            RiskLevel::Medium => {
-                Some(widget::tooltip(
-                    styled_badge_icon(
-                        "dialog-information-symbolic",
-                        icon_size,
-                        cosmic::iced::Color::from_rgb(0.2, 0.6, 0.85),
-                        cosmic::iced::Color::from_rgba(0.2, 0.6, 0.85, 0.2),
-                    ),
-                    widget::text::caption(format!("{:?} - Good Wayland support", compat.framework)),
-                    widget::tooltip::Position::Bottom,
-                ))
-            }
-            RiskLevel::High => {
-                let tooltip_text = if matches!(compat.support, WaylandSupport::X11Only) {
-                    fl!("x11-only-tooltip")
-                } else {
-                    fl!("wayland-issues-warning")
-                };
-
-                Some(widget::tooltip(
-                    styled_badge_icon(
-                        "dialog-warning-symbolic",
-                        icon_size,
-                        cosmic::iced::Color::from_rgb(1.0, 0.55, 0.0),
-                        cosmic::iced::Color::from_rgba(1.0, 0.55, 0.0, 0.2),
-                    ),
-                    widget::text::caption(tooltip_text),
-                    widget::tooltip::Position::Bottom,
-                ))
-            }
-            RiskLevel::Critical => {
-                let tooltip_text = fl!("x11-only-tooltip");
-                Some(widget::tooltip(
-                    styled_badge_icon(
-                        "dialog-warning-symbolic",
-                        icon_size,
-                        cosmic::iced::Color::from_rgb(1.0, 0.3, 0.3),
-                        cosmic::iced::Color::from_rgba(1.0, 0.3, 0.3, 0.2),
-                    ),
-                    widget::text::caption(tooltip_text),
-                    widget::tooltip::Position::Bottom,
-                ))
-            }
-        }
-    } else {
-        Some(widget::tooltip(
-            styled_badge_icon(
-                "dialog-question-symbolic",
-                icon_size,
-                cosmic::iced::Color::from_rgb(0.5, 0.5, 0.5),
-                cosmic::iced::Color::from_rgba(0.5, 0.5, 0.5, 0.15),
-            ),
-            widget::text::caption("Wayland compatibility unknown"),
-            widget::tooltip::Position::Bottom,
-        ))
-    };
-
-    compat_badge.map(|badge| badge.into())
-}
-
-// Helper function to create a styled icon container with rounded corners
-fn styled_icon<'a>(icon: widget::icon::Handle, size: u16) -> Element<'a, Message> {
-    use cosmic::iced::{Border, Color};
-
-    widget::container(
-        widget::icon::icon(icon)
-            .size(size)
-    )
-    .padding(8)
-    .class(theme::Container::custom(move |theme| {
-        let cosmic = theme.cosmic();
-
-        // Use a slightly elevated background for better contrast
-        let base_color = cosmic.background.component.base;
-        let bg_color = Color::from_rgba(
-            (base_color.red + 0.05).min(1.0),
-            (base_color.green + 0.05).min(1.0),
-            (base_color.blue + 0.05).min(1.0),
-            base_color.alpha,
-        );
-
-        widget::container::Style {
-            icon_color: Some(cosmic.on_bg_color().into()),
-            text_color: Some(cosmic.on_bg_color().into()),
-            background: Some(bg_color.into()),
-            border: Border {
-                radius: ((size + 16) as f32 * 0.25).into(), // Larger radius accounting for padding
-                width: 1.0,
-                color: Color::from_rgba(0.0, 0.0, 0.0, 0.05),
-            },
-            shadow: cosmic::iced::Shadow {
-                color: Color::from_rgba(0.0, 0.0, 0.0, 0.15),
-                offset: cosmic::iced::Vector::new(0.0, 3.0),
-                blur_radius: 8.0,
-            },
-        }
-    }))
-    .into()
-}
-
-fn package_card_view<'a>(
-    info: &'a AppInfo,
-    icon_opt: Option<&'a widget::icon::Handle>,
-    controls: Vec<Element<'a, Message>>,
-    top_controls: Option<Vec<Element<'a, Message>>>,
-    spacing: &cosmic_theme::Spacing,
-    width: usize,
-) -> Element<'a, Message> {
-    // Only show compatibility badge for Flathub apps (only they have the data)
-    let compat_badge = if info.source_id == "flathub" {
-        wayland_compat_badge(info, 16)
-    } else {
-        None
-    };
-
-    let mut name_row = vec![
-        widget::text::body(&info.name)
-            .height(20.0)
-            .width(width as f32 - 180.0)
-            .into()
-    ];
-
-    if let Some(badge) = compat_badge {
-        name_row.push(badge);
-    }
-
-    let height = 20.0 + 28.0 + 32.0 + 3.0 * spacing.space_xxs as f32;
-    let top_row_cap = 1 + top_controls
-        .as_deref()
-        .map(|elements| 1 + elements.len())
-        .unwrap_or_default();
-    let column = widget::column::with_children(vec![
-        widget::row::with_capacity(top_row_cap)
-            .push(widget::column::with_children(vec![
-                widget::row::with_children(name_row)
-                    .spacing(spacing.space_xxs)
-                    .into(),
-                widget::text::caption(&info.summary)
-                    .height(28.0)
-                    .width(width as f32 - 180.0)
-                    .into(),
-            ]))
-            .push_maybe(top_controls.is_some().then_some(widget::horizontal_space()))
-            .extend(top_controls.unwrap_or_default())
-            .into(),
-        widget::Space::with_height(Length::Fixed(spacing.space_xxs.into())).into(),
-        widget::row::with_children(controls)
-            .height(32.0)
-            .spacing(spacing.space_xs)
-            .into(),
-    ]);
-
-    let icon: Element<_> = match icon_opt {
-        Some(icon) => styled_icon(icon.clone(), ICON_SIZE_PACKAGE),
-        None => widget::Space::with_width(ICON_SIZE_PACKAGE as f32).into(),
-    };
-
-    widget::container(
-        widget::row()
-            .push(icon)
-            .push(column)
-            .align_y(Alignment::Center)
-            .spacing(spacing.space_s),
-    )
-    .align_y(Alignment::Center)
-    .width(width as f32)
-    .height(height)
-    .padding([spacing.space_xxs, spacing.space_s])
-    .class(theme::Container::Card)
-    .into()
-}
-
 impl Package {
     pub fn grid_metrics(spacing: &cosmic_theme::Spacing, width: usize) -> GridMetrics {
         GridMetrics::new(width, 320 + 2 * spacing.space_s as usize, spacing.space_xxs)
@@ -844,140 +396,6 @@ impl Package {
             spacing,
             width,
         )
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct SearchResult {
-    backend_name: &'static str,
-    id: AppId,
-    icon_opt: Option<widget::icon::Handle>,
-    // Info from selected source
-    info: Arc<AppInfo>,
-    weight: i64,
-}
-
-impl SearchResult {
-    pub fn grid_metrics(spacing: &cosmic_theme::Spacing, width: usize) -> GridMetrics {
-        GridMetrics::new(width, 240 + 2 * spacing.space_s as usize, spacing.space_xxs)
-    }
-
-    pub fn grid_view<'a, F: Fn(usize) -> Message + 'a>(
-        results: &'a [Self],
-        spacing: cosmic_theme::Spacing,
-        width: usize,
-        callback: F,
-    ) -> Element<'a, Message> {
-        let GridMetrics {
-            cols,
-            item_width,
-            column_spacing,
-        } = Self::grid_metrics(&spacing, width);
-
-        let mut grid = widget::grid();
-        let mut col = 0;
-        for (result_i, result) in results.iter().enumerate() {
-            if col >= cols {
-                grid = grid.insert_row();
-                col = 0;
-            }
-            grid = grid.push(
-                widget::mouse_area(result.card_view(&spacing, item_width))
-                    .on_press(callback(result_i)),
-            );
-            col += 1;
-        }
-        grid.column_spacing(column_spacing)
-            .row_spacing(column_spacing)
-            .into()
-    }
-
-    pub fn card_view<'a>(
-        &'a self,
-        spacing: &cosmic_theme::Spacing,
-        width: usize,
-    ) -> Element<'a, Message> {
-        // Check for editor's choice and verified status
-        let is_editors_choice = EDITORS_CHOICE
-            .iter()
-            .any(|choice_id| choice_id == &self.id.normalized());
-        let is_verified = self.info.verified;
-
-        // Always show a compatibility badge - every app gets a status indicator
-        let compat_badge = wayland_compat_badge(&self.info, 16);
-
-        let mut name_row = vec![];
-        name_row.push(widget::text::body(&self.info.name)
-            .height(Length::Fixed(20.0))
-            .into());
-
-        if let Some(badge) = compat_badge {
-            name_row.push(badge.into());
-        }
-
-
-        widget::container(
-            widget::row::with_children(vec![
-                match &self.icon_opt {
-                    Some(icon) => styled_icon(icon.clone(), ICON_SIZE_SEARCH),
-                    None => {
-                        widget::Space::with_width(Length::Fixed(ICON_SIZE_SEARCH as f32)).into()
-                    }
-                },
-                widget::column::with_children(vec![
-                    widget::row::with_children(name_row)
-                        .spacing(spacing.space_xxs)
-                        .into(),
-                    widget::text::caption(&self.info.summary)
-                        .height(Length::Fixed(28.0))
-                        .into(),
-                    widget::row::with_children(vec![
-                        if self.info.source_id == "flathub" && self.info.monthly_downloads > 0 {
-                            widget::tooltip(
-                                widget::text::caption(format_download_count(self.info.monthly_downloads)),
-                                widget::text(fl!("monthly-downloads-tooltip")),
-                                widget::tooltip::Position::Bottom,
-                            )
-                            .into()
-                        } else {
-                            widget::Space::with_width(Length::Fixed(0.0)).into()
-                        },
-                        widget::horizontal_space().into(),
-                        if is_editors_choice {
-                            widget::tooltip(
-                                widget::icon::icon(icon_cache_handle("starred-symbolic", 16))
-                                    .size(16),
-                                widget::text(fl!("editors-choice-tooltip")),
-                                widget::tooltip::Position::Bottom,
-                            )
-                            .into()
-                        } else if is_verified {
-                            widget::tooltip(
-                                widget::icon::icon(icon_cache_handle("checkmark-symbolic", 16))
-                                    .size(16),
-                                widget::text(fl!("verified-tooltip")),
-                                widget::tooltip::Position::Bottom,
-                            )
-                            .into()
-                        } else {
-                            widget::Space::with_width(Length::Fixed(0.0)).into()
-                        },
-                    ])
-                    .spacing(spacing.space_xxs)
-                    .align_y(Alignment::Center)
-                    .into()
-                ])
-                .into(),
-            ])
-            .align_y(Alignment::Center)
-            .spacing(spacing.space_s),
-        )
-        .align_y(Alignment::Center)
-        .width(Length::Fixed(width as f32))
-        .height(Length::Fixed(64.0 + (spacing.space_xxs as f32) * 2.0))
-        .padding([spacing.space_xxs, spacing.space_s])
-        .class(theme::Container::Card)
-        .into()
     }
 }
 
@@ -1221,14 +639,12 @@ impl App {
                     }
 
                     if let Some(weight) = filter_map(id, info, *installed) {
-                        // Skip if best weight has equal or lower weight
                         if let Some(prev_weight) = best_weight {
                             if prev_weight <= weight {
                                 continue;
                             }
                         }
 
-                        // Replace best weight
                         best_weight = Some(weight);
                     }
                 }
@@ -1264,23 +680,27 @@ impl App {
                     }
                 }
 
-                Some(SearchResult {
+                Some(SearchResult::new(
                     backend_name,
-                    id: id.clone(),
-                    icon_opt: None,
-                    info: info.clone(),
+                    id.clone(),
+                    None,
+                    info.clone(),
                     weight,
-                })
+                ))
             })
             .collect();
 
         match sort_mode {
             SearchSortMode::Relevance => {
                 results.par_sort_unstable_by(|a, b| match a.weight.cmp(&b.weight) {
-                    cmp::Ordering::Equal => match LANGUAGE_SORTER.compare(&a.info.name, &b.info.name) {
-                        cmp::Ordering::Equal => LANGUAGE_SORTER.compare(a.backend_name, b.backend_name),
-                        ordering => ordering,
-                    },
+                    cmp::Ordering::Equal => {
+                        match LANGUAGE_SORTER.compare(&a.info.name, &b.info.name) {
+                            cmp::Ordering::Equal => {
+                                LANGUAGE_SORTER.compare(a.backend_name(), b.backend_name())
+                            }
+                            ordering => ordering,
+                        }
+                    }
                     ordering => ordering,
                 });
             }
@@ -1305,8 +725,16 @@ impl App {
             SearchSortMode::BestWaylandSupport => {
                 use crate::app_info::RiskLevel;
                 results.par_sort_unstable_by(|a, b| {
-                    let a_risk = a.info.wayland_compat_lazy().map(|c| c.risk_level).unwrap_or(RiskLevel::Critical);
-                    let b_risk = b.info.wayland_compat_lazy().map(|c| c.risk_level).unwrap_or(RiskLevel::Critical);
+                    let a_risk = a
+                        .info
+                        .wayland_compat_lazy()
+                        .map(|c| c.risk_level)
+                        .unwrap_or(RiskLevel::Critical);
+                    let b_risk = b
+                        .info
+                        .wayland_compat_lazy()
+                        .map(|c| c.risk_level)
+                        .unwrap_or(RiskLevel::Critical);
 
                     // Lower risk level = better (Low=0, Medium=1, High=2, Critical=3)
                     let a_score = match a_risk {
@@ -1332,7 +760,7 @@ impl App {
         // Load only enough icons to show one page of results
         //TODO: load in background
         for result in results.iter_mut().take(MAX_RESULTS) {
-            let Some(backend) = backends.get(result.backend_name) else {
+            let Some(backend) = backends.get(result.backend_name()) else {
                 continue;
             };
             let appstream_caches = backend.info_caches();
@@ -1355,9 +783,13 @@ impl App {
             async move {
                 tokio::task::spawn_blocking(move || {
                     let start = Instant::now();
-                    let applet_provide = AppProvide::Id("com.system76.CosmicApplet".to_string());
-                    let results =
-                        Self::generic_search(&apps, &backends, &os_codename, |_id, info, _installed| {
+                    let applet_provide =
+                        AppProvide::Id("com.system76.CosmicApplet".to_string());
+                    let results = Self::generic_search(
+                        &apps,
+                        &backends,
+                        &os_codename,
+                        |_id, info, _installed| {
                             if !matches!(info.kind, AppKind::DesktopApplication) {
                                 return None;
                             }
@@ -1403,39 +835,72 @@ impl App {
                     let start = Instant::now();
                     let now = chrono::Utc::now().timestamp();
                     let results = match explore_page {
-                        ExplorePage::EditorsChoice => Self::generic_search(&apps, &backends, &os_codename, |id, _info, _installed | {
-                            EDITORS_CHOICE
-                            .iter()
-                            .position(|choice_id| choice_id == &id.normalized())
-                            .map(|x| x as i64)
-                        }, SearchSortMode::Relevance, WaylandFilter::All),
-                        ExplorePage::PopularApps => Self::generic_search(&apps, &backends, &os_codename, |_id, info, _installed| {
-                            if !matches!(info.kind, AppKind::DesktopApplication) {
-                                return None;
-                            }
-                            Some(-(info.monthly_downloads as i64))
-                        }, SearchSortMode::Relevance, WaylandFilter::All),
-                        ExplorePage::MadeForCosmic => {
-                            let provide = AppProvide::Id("com.system76.CosmicApplication".to_string());
-                            Self::generic_search(&apps, &backends, &os_codename, |_id, info, _installed| {
+                        ExplorePage::EditorsChoice => Self::generic_search(
+                            &apps,
+                            &backends,
+                            &os_codename,
+                            |id, _info, _installed| {
+                                EDITORS_CHOICE
+                                    .iter()
+                                    .position(|choice_id| choice_id == &id.normalized())
+                                    .map(|x| x as i64)
+                            },
+                            SearchSortMode::Relevance,
+                            WaylandFilter::All,
+                        ),
+                        ExplorePage::PopularApps => Self::generic_search(
+                            &apps,
+                            &backends,
+                            &os_codename,
+                            |_id, info, _installed| {
                                 if !matches!(info.kind, AppKind::DesktopApplication) {
                                     return None;
                                 }
-                                if info.provides.contains(&provide) {
-                                    Some(-(info.monthly_downloads as i64))
-                                } else {
+                                Some(-(info.monthly_downloads as i64))
+                            },
+                            SearchSortMode::Relevance,
+                            WaylandFilter::All,
+                        ),
+                        ExplorePage::MadeForCosmic => {
+                            let provide =
+                                AppProvide::Id("com.system76.CosmicApplication".to_string());
+                            Self::generic_search(
+                                &apps,
+                                &backends,
+                                &os_codename,
+                                |_id, info, _installed| {
+                                    if !matches!(info.kind, AppKind::DesktopApplication) {
+                                        return None;
+                                    }
+                                    if info.provides.contains(&provide) {
+                                        Some(-(info.monthly_downloads as i64))
+                                    } else {
+                                        None
+                                    }
+                                },
+                                SearchSortMode::Relevance,
+                                WaylandFilter::All,
+                            )
+                        }
+                        ExplorePage::NewApps => Self::generic_search(
+                            &apps,
+                            &backends,
+                            &os_codename,
+                                |_id, _info, _installed| {
+                                    //TODO
                                     None
+                                },
+                            SearchSortMode::Relevance,
+                            WaylandFilter::All,
+                        ),
+                        ExplorePage::RecentlyUpdated => Self::generic_search(
+                            &apps,
+                            &backends,
+                            &os_codename,
+                            |id, info, _installed| {
+                                if !matches!(info.kind, AppKind::DesktopApplication) {
+                                    return None;
                                 }
-                            }, SearchSortMode::Relevance, WaylandFilter::All)
-                        },
-                        ExplorePage::NewApps => Self::generic_search(&apps, &backends, &os_codename, |_id, _info, _installed| {
-                            //TODO
-                            None
-                        }, SearchSortMode::Relevance, WaylandFilter::All),
-                        ExplorePage::RecentlyUpdated => Self::generic_search(&apps, &backends, &os_codename, |id, info, _installed| {
-                            if !matches!(info.kind, AppKind::DesktopApplication) {
-                                return None;
-                            }
                             // Finds the newest release and sorts from newest to oldest
                             //TODO: appstream release info is often incomplete
                             let mut min_weight = 0;
@@ -1447,17 +912,29 @@ impl App {
                                             min_weight = weight;
                                         }
                                     } else {
-                                        log::info!("{:?} has release timestamp {} which is past the present {}", id, timestamp, now);
+                                        log::info!(
+                                            "{:?} has release timestamp {} which is past the present {}",
+                                            id,
+                                            timestamp,
+                                            now
+                                        );
                                     }
                                 }
                             }
                             Some(min_weight)
-                        }, SearchSortMode::Relevance, WaylandFilter::All),
+                            },
+                            SearchSortMode::Relevance,
+                            WaylandFilter::All,
+                        ),
                         _ => {
                             let categories = explore_page.categories();
-                            Self::generic_search(&apps, &backends, &os_codename, |_id, info, _installed| {
-                                if !matches!(info.kind, AppKind::DesktopApplication) {
-                                    return None;
+                            Self::generic_search(
+                                &apps,
+                                &backends,
+                                &os_codename,
+                                |_id, info, _installed| {
+                                    if !matches!(info.kind, AppKind::DesktopApplication) {
+                                        return None;
                                 }
                                 for category in categories {
                                     //TODO: contains doesn't work due to type mismatch
@@ -1493,13 +970,20 @@ impl App {
             async move {
                 tokio::task::spawn_blocking(move || {
                     let start = Instant::now();
-                    let results = Self::generic_search(&apps, &backends, &os_codename, |id, _info, installed| {
-                        if installed {
-                            Some(if id.is_system() { -1 } else { 0 })
-                        } else {
-                            None
-                        }
-                    }, SearchSortMode::Relevance, WaylandFilter::All);
+                    let results = Self::generic_search(
+                        &apps,
+                        &backends,
+                        &os_codename,
+                        |id, _info, installed| {
+                            if installed {
+                                Some(if id.is_system() { -1 } else { 0 })
+                            } else {
+                                None
+                            }
+                        },
+                        SearchSortMode::Relevance,
+                        WaylandFilter::All,
+                    );
                     let duration = start.elapsed();
                     log::info!(
                         "searched for installed in {:?}, found {} results",
@@ -1528,7 +1012,8 @@ impl App {
                     return self.handle_file_url(input, url.path());
                 }
                 "mime" => {
-                    // This is a workaround to be able to search for mime handlers, mime is not a real URL scheme
+                    // This is a workaround to be able to search for mime handlers,
+                    // mime is not a real URL scheme
                     return self.handle_mime_url(input, url.path());
                 }
                 scheme => {
@@ -1567,10 +1052,14 @@ impl App {
             async move {
                 tokio::task::spawn_blocking(move || {
                     let start = Instant::now();
-                    let results = Self::generic_search(&apps, &backends, &os_codename, |_id, info, _installed| {
-                        if !matches!(info.kind, AppKind::DesktopApplication) {
-                            return None;
-                        }
+                    let results = Self::generic_search(
+                        &apps,
+                        &backends,
+                        &os_codename,
+                        |_id, info, _installed| {
+                            if !matches!(info.kind, AppKind::DesktopApplication) {
+                                return None;
+                            }
                         //TODO: improve performance
                         let stats_weight = |weight: i64| -> i64 {
                             //TODO: make sure no overflows
@@ -1582,14 +1071,11 @@ impl App {
                             let mat = regex.find(string)?;
                             if mat.range().start == 0 {
                                 if mat.range().end == string.len() {
-                                    // String equals search phrase
                                     Some(stats_weight(weight + 0))
                                 } else {
-                                    // String starts with search phrase
                                     Some(stats_weight(weight + 1))
                                 }
                             } else {
-                                // String contains search phrase
                                 Some(stats_weight(weight + 2))
                             }
                         };
@@ -2178,13 +1664,13 @@ impl App {
                     //TODO: store the resolved packages somewhere
                     let mut results = Vec::with_capacity(packages.len());
                     for (backend_name, package) in packages {
-                        results.push(SearchResult {
+                        results.push(SearchResult::new(
                             backend_name,
-                            id: package.id,
-                            icon_opt: Some(package.icon),
-                            info: package.info,
-                            weight: 0,
-                        });
+                            package.id,
+                            Some(package.icon),
+                            package.info,
+                            0,
+                        ));
                     }
                     action::app(Message::SearchResults(input, results, true))
                 })
@@ -2234,13 +1720,13 @@ impl App {
                     //TODO: store the resolved packages somewhere
                     let mut results = Vec::with_capacity(packages.len());
                     for (backend_name, package) in packages {
-                        results.push(SearchResult {
+                        results.push(SearchResult::new(
                             backend_name,
-                            id: package.id,
-                            icon_opt: Some(package.icon),
-                            info: package.info,
-                            weight: 0,
-                        });
+                            package.id,
+                            Some(package.icon),
+                            package.info,
+                            0,
+                        ));
                     }
                     action::app(Message::SearchResults(input, results, true))
                 })
@@ -2635,7 +2121,9 @@ impl App {
                 // Only show Wayland compatibility badge for Flathub apps
                 if selected.info.source_id == "flathub" {
                     if let Some(badge) = wayland_compat_badge(&selected.info, 24) {
-                        title_row_children.push(widget::Space::with_width(Length::Fixed(space_xs.into())).into());
+                        title_row_children.push(
+                            widget::Space::with_width(Length::Fixed(space_xs.into())).into(),
+                        );
                         title_row_children.push(badge);
                     }
                 }
@@ -2687,8 +2175,10 @@ impl App {
                 ])
                 .align_x(Alignment::Center)
                 .width(Length::Fill);
-                let downloads_widget = (selected.info.source_id == "flathub" && selected.info.monthly_downloads > 0).then(|| {
-                    widget::column::with_children(vec![
+                let downloads_widget = (selected.info.source_id == "flathub"
+                    && selected.info.monthly_downloads > 0)
+                    .then(|| {
+                        widget::column::with_children(vec![
                         widget::text::heading(selected.info.monthly_downloads.to_string()).into(),
                         //TODO: description of what this means?
                         widget::text::body(fl!("monthly-downloads")).into(),
@@ -2796,8 +2286,11 @@ impl App {
                 // Add compatibility warning banner if needed (only for Flathub apps)
                 if selected.info.source_id == "flathub" {
                     if let Some(compat) = selected.info.wayland_compat_lazy() {
-                        if compat.risk_level == RiskLevel::Critical || compat.risk_level == RiskLevel::High {
-                            let (title, description, icon_name) = if matches!(compat.support, WaylandSupport::X11Only) {
+                        if compat.risk_level == RiskLevel::Critical
+                            || compat.risk_level == RiskLevel::High
+                        {
+                            let (title, description, icon_name) =
+                                if matches!(compat.support, WaylandSupport::X11Only) {
                                 (
                                     fl!("compatibility-warning"),
                                     fl!("x11-only-description"),
@@ -3707,7 +3200,7 @@ impl Application for App {
                             for (i, result) in results.iter().enumerate() {
                                 let installed = Self::is_installed_inner(
                                     &self.installed,
-                                    result.backend_name,
+                                    result.backend_name(),
                                     &result.id,
                                     &result.info,
                                 );
@@ -3719,11 +3212,11 @@ impl Application for App {
                                     };
                                     eprintln!(
                                         "{:?} {:?} from backend {} and info {:?}",
-                                        kind, result.id, result.backend_name, result.info
+                                        kind, result.id, result.backend_name(), result.info
                                     );
                                     ops.push(Operation {
                                         kind,
-                                        backend_name: result.backend_name,
+                                        backend_name: result.backend_name(),
                                         package_ids: vec![result.id.clone()],
                                         infos: vec![result.info.clone()],
                                     });
@@ -4006,7 +3499,7 @@ impl Application for App {
                     if auto_select && results.len() == 1 {
                         // This drops update_scroll's command, it will be done again later
                         let _ = self.select(
-                            results[0].backend_name,
+                            results[0].backend_name(),
                             results[0].id.clone(),
                             results[0].icon_opt.clone(),
                             results[0].info.clone(),
@@ -4026,7 +3519,7 @@ impl Application for App {
                             for (i, result) in results.iter().enumerate() {
                                 if Self::is_installed_inner(
                                     &self.installed,
-                                    result.backend_name,
+                                    result.backend_name(),
                                     &result.id,
                                     &result.info,
                                 ) {
@@ -4097,7 +3590,7 @@ impl Application for App {
                     match results.get(result_i) {
                         Some(result) => {
                             return self.select(
-                                result.backend_name,
+                                result.backend_name(),
                                 result.id.clone(),
                                 result.icon_opt.clone(),
                                 result.info.clone(),
@@ -4138,7 +3631,7 @@ impl Application for App {
                     match results.get(result_i) {
                         Some(result) => {
                             return self.select(
-                                result.backend_name,
+                                result.backend_name(),
                                 result.id.clone(),
                                 result.icon_opt.clone(),
                                 result.info.clone(),
@@ -4155,7 +3648,7 @@ impl Application for App {
                     match results.get(result_i) {
                         Some(result) => {
                             return self.select(
-                                result.backend_name,
+                                result.backend_name(),
                                 result.id.clone(),
                                 result.icon_opt.clone(),
                                 result.info.clone(),
@@ -4176,7 +3669,7 @@ impl Application for App {
                     match results.get(result_i) {
                         Some(result) => {
                             return self.select(
-                                result.backend_name,
+                                result.backend_name(),
                                 result.id.clone(),
                                 result.icon_opt.clone(),
                                 result.info.clone(),

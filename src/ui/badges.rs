@@ -3,7 +3,6 @@
 use cosmic::iced::Color;
 use cosmic::widget;
 use cosmic::Element;
-use std::rc::Rc;
 
 use crate::app_info::AppInfo;
 use crate::app_info::{RiskLevel, WaylandSupport};

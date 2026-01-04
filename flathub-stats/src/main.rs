@@ -2,7 +2,6 @@ use std::{collections::HashMap, error::Error, fs};
 
 use app_id::AppId;
 use chrono::{Datelike, Duration, Utc};
-#[path = "../../src/app_id.rs"]
 mod app_id;
 
 #[derive(serde::Deserialize)]

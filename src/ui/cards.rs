@@ -1,10 +1,10 @@
 //! Card rendering components for packages and search results
 
+use cosmic::Element;
+use cosmic::cosmic_theme;
 use cosmic::iced::{Alignment, Border, Color, Length};
 use cosmic::theme;
 use cosmic::widget;
-use cosmic::Element;
-use cosmic::cosmic_theme;
 
 use crate::app_info::AppInfo;
 use crate::constants::ICON_SIZE_PACKAGE;
@@ -14,62 +14,41 @@ use crate::ui::badges::wayland_compat_badge;
 pub use crate::Message;
 
 /// Create a styled icon container with rounded corners
-///
-/// This creates an icon with a slightly elevated background, rounded corners,
-/// border, and shadow for better visual contrast.
-///
-/// # Arguments
-/// * `icon` - The icon handle to display
-/// * `size` - Size of the icon in pixels
 pub fn styled_icon<'a>(icon: widget::icon::Handle, size: u16) -> Element<'a, Message> {
-    widget::container(
-        widget::icon::icon(icon)
-            .size(size)
-    )
-    .padding(8)
-    .class(theme::Container::custom(move |theme| {
-        let cosmic = theme.cosmic();
+    widget::container(widget::icon::icon(icon).size(size))
+        .padding(8)
+        .class(theme::Container::custom(move |theme| {
+            let cosmic = theme.cosmic();
 
-        // Use a slightly elevated background for better contrast
-        let base_color = cosmic.background.component.base;
-        let bg_color = Color::from_rgba(
-            (base_color.red + 0.05).min(1.0),
-            (base_color.green + 0.05).min(1.0),
-            (base_color.blue + 0.05).min(1.0),
-            base_color.alpha,
-        );
+            // Use a slightly elevated background for better contrast
+            let base_color = cosmic.background.component.base;
+            let bg_color = Color::from_rgba(
+                (base_color.red + 0.05).min(1.0),
+                (base_color.green + 0.05).min(1.0),
+                (base_color.blue + 0.05).min(1.0),
+                base_color.alpha,
+            );
 
-        widget::container::Style {
-            icon_color: Some(cosmic.on_bg_color().into()),
-            text_color: Some(cosmic.on_bg_color().into()),
-            background: Some(bg_color.into()),
-            border: Border {
-                radius: ((size + 16) as f32 * 0.25).into(), // Larger radius accounting for padding
-                width: 1.0,
-                color: Color::from_rgba(0.0, 0.0, 0.0, 0.05),
-            },
-            shadow: cosmic::iced::Shadow {
-                color: Color::from_rgba(0.0, 0.0, 0.0, 0.15),
-                offset: cosmic::iced::Vector::new(0.0, 3.0),
-                blur_radius: 8.0,
-            },
-        }
-    }))
-    .into()
+            widget::container::Style {
+                icon_color: Some(cosmic.on_bg_color().into()),
+                text_color: Some(cosmic.on_bg_color().into()),
+                background: Some(bg_color.into()),
+                border: Border {
+                    radius: ((size + 16) as f32 * 0.25).into(), // Larger radius accounting for padding
+                    width: 1.0,
+                    color: Color::from_rgba(0.0, 0.0, 0.0, 0.05),
+                },
+                shadow: cosmic::iced::Shadow {
+                    color: Color::from_rgba(0.0, 0.0, 0.0, 0.15),
+                    offset: cosmic::iced::Vector::new(0.0, 3.0),
+                    blur_radius: 8.0,
+                },
+            }
+        }))
+        .into()
 }
 
 /// Create a package card view
-///
-/// Renders a card with icon, name, summary, and control buttons.
-/// Used for displaying packages in grid views.
-///
-/// # Arguments
-/// * `info` - Application information
-/// * `icon_opt` - Optional icon handle
-/// * `controls` - Vector of control button elements
-/// * `top_controls` - Optional vector of top control elements
-/// * `spacing` - Cosmic theme spacing values
-/// * `width` - Width of the card
 pub fn package_card_view<'a>(
     info: &'a AppInfo,
     icon_opt: Option<&'a widget::icon::Handle>,
@@ -89,7 +68,7 @@ pub fn package_card_view<'a>(
         widget::text::body(&info.name)
             .height(20.0)
             .width(width as f32 - 180.0)
-            .into()
+            .into(),
     ];
 
     if let Some(badge) = compat_badge {

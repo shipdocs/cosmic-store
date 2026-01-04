@@ -1,6 +1,5 @@
 use crate::AppId;
 
-/// Determine source priority
 pub fn priority(backend_name: &str, source_id: &str, id: &AppId) -> i32 {
     let mut priority = 0;
     if id.is_system() {

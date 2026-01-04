@@ -10,7 +10,6 @@ pub struct AppId(String);
 
 impl AppId {
     pub fn new(id_raw: &str) -> Self {
-        // The raw ID is stored for use by the backends
         Self(id_raw.to_string())
     }
 

@@ -140,7 +140,7 @@ impl SearchResult {
             .into());
 
         if let Some(badge) = compat_badge {
-            name_row.push(badge.into());
+            name_row.push(badge);
         }
 
 

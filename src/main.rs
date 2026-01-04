@@ -4,7 +4,7 @@
 use clap::Parser;
 
 mod constants;
-use constants::{ICON_SIZE_SEARCH, ICON_SIZE_PACKAGE, ICON_SIZE_DETAILS, MAX_GRID_WIDTH, MAX_RESULTS};
+use constants::{MAX_GRID_WIDTH, MAX_RESULTS};
 
 mod utils;
 
@@ -12,10 +12,11 @@ mod search;
 use search::{SearchResult, SearchSortMode, WaylandFilter};
 
 mod pages;
-use pages::{DialogPage, ContextPage, ExplorePage, NavPage};
+use pages::{ContextPage, DialogPage, ExplorePage, NavPage};
+use pages::{DetailsPage, DetailsPageActions, SelectedSource};
 
 mod ui;
-use ui::{GridMetrics, package_card_view, styled_icon, wayland_compat_badge};
+use ui::{GridMetrics, package_card_view};
 
 use cosmic::{
     Application, ApplicationExt, Element, action,
@@ -54,7 +55,9 @@ use std::{
 use app_id::AppId;
 mod app_id;
 
-use app_info::{AppIcon, AppInfo, AppKind, AppProvide, AppUrl, WaylandSupport, AppFramework, RiskLevel};
+use app_info::{
+    AppIcon, AppInfo, AppKind, AppProvide, AppUrl,
+};
 mod app_info;
 
 use appstream_cache::AppstreamCache;
@@ -62,29 +65,6 @@ mod appstream_cache;
 
 use backend::{Backends, Package};
 mod backend;
-
-impl Package {
-    pub fn grid_metrics(spacing: &cosmic_theme::Spacing, width: usize) -> GridMetrics {
-        GridMetrics::new(width, 320 + 2 * spacing.space_s as usize, spacing.space_xxs)
-    }
-
-    pub fn card_view<'a>(
-        &'a self,
-        controls: Vec<Element<'a, Message>>,
-        top_controls: Option<Vec<Element<'a, Message>>>,
-        spacing: &cosmic_theme::Spacing,
-        width: usize,
-    ) -> Element<'a, Message> {
-        package_card_view(
-            &self.info,
-            Some(&self.icon),
-            controls,
-            top_controls,
-            spacing,
-            width,
-        )
-    }
-}
 
 use config::{AppTheme, CONFIG_VERSION, Config};
 mod config;
@@ -98,7 +78,7 @@ mod editors_choice;
 use gstreamer::GStreamerCodec;
 mod gstreamer;
 
-use icon_cache::{icon_cache_handle, icon_cache_icon};
+use icon_cache::icon_cache_handle;
 mod icon_cache;
 
 use key_bind::{KeyBind, key_binds};
@@ -119,12 +99,7 @@ use priority::priority;
 mod priority;
 
 mod stats;
-
-const ICON_SIZE_SEARCH: u16 = 48;
-const ICON_SIZE_PACKAGE: u16 = 64;
-const ICON_SIZE_DETAILS: u16 = 128;
-const MAX_GRID_WIDTH: f32 = 1600.0;
-const MAX_RESULTS: usize = 100;
+mod url_handlers;
 
 #[derive(Debug, Default, Parser)]
 struct Cli {
@@ -145,6 +120,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn")).init();
 
     localize::localize();
+    stats::load_stats_async();
 
     let cli = Cli::parse();
 
@@ -206,24 +182,6 @@ pub enum Action {
     SearchActivate,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum SearchSortMode {
-    Relevance,
-    MostDownloads,
-    RecentlyUpdated,
-    BestWaylandSupport,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum WaylandFilter {
-    All,
-    Excellent,  // Low risk
-    Good,       // Medium risk
-    Caution,    // High risk
-    Limited,    // Critical risk
-    Unknown,    // No data
-}
-
 impl Action {
     pub fn message(&self) -> Message {
         match self {
@@ -232,6 +190,7 @@ impl Action {
     }
 }
 
+#[derive(Clone, Debug, PartialEq)]
 pub struct AppEntry {
     backend_name: &'static str,
     info: Arc<AppInfo>,
@@ -385,23 +344,6 @@ pub enum Message {
     PlaceApplet(AppId),
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum ContextPage {
-    Operations,
-    ReleaseNotes(usize, String),
-    Repositories,
-    Settings,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum DialogPage {
-    FailedOperation(u64),
-    RepositoryAddError(String),
-    RepositoryRemove(&'static str, RepositoryRemoveError),
-    Uninstall(&'static str, AppId, Arc<AppInfo>),
-    Place(AppId),
-}
-
 // From https://specifications.freedesktop.org/menu-spec/latest/apa.html
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Category {
@@ -438,392 +380,6 @@ impl Category {
     }
 }
 
-#[derive(Clone, Copy, Default, Debug, Eq, PartialEq)]
-pub enum NavPage {
-    #[default]
-    Explore,
-    Create,
-    Work,
-    Develop,
-    Learn,
-    Game,
-    Relax,
-    Socialize,
-    Utilities,
-    Applets,
-    Installed,
-    Updates,
-}
-
-impl NavPage {
-    fn all() -> &'static [Self] {
-        &[
-            Self::Explore,
-            Self::Create,
-            Self::Work,
-            Self::Develop,
-            Self::Learn,
-            Self::Game,
-            Self::Relax,
-            Self::Socialize,
-            Self::Utilities,
-            Self::Applets,
-            Self::Installed,
-            Self::Updates,
-        ]
-    }
-
-    fn title(&self) -> String {
-        match self {
-            Self::Explore => fl!("explore"),
-            Self::Create => fl!("create"),
-            Self::Work => fl!("work"),
-            Self::Develop => fl!("develop"),
-            Self::Learn => fl!("learn"),
-            Self::Game => fl!("game"),
-            Self::Relax => fl!("relax"),
-            Self::Socialize => fl!("socialize"),
-            Self::Utilities => fl!("utilities"),
-            Self::Applets => fl!("applets"),
-            Self::Installed => fl!("installed-apps"),
-            Self::Updates => fl!("updates"),
-        }
-    }
-
-    // From https://specifications.freedesktop.org/menu-spec/latest/apa.html
-    fn categories(&self) -> Option<&'static [Category]> {
-        match self {
-            Self::Create => Some(&[Category::AudioVideo, Category::Graphics]),
-            Self::Work => Some(&[Category::Development, Category::Office, Category::Science]),
-            Self::Develop => Some(&[Category::Development]),
-            Self::Learn => Some(&[Category::Education]),
-            Self::Game => Some(&[Category::Game]),
-            Self::Relax => Some(&[Category::AudioVideo]),
-            Self::Socialize => Some(&[Category::Network]),
-            Self::Utilities => Some(&[Category::Settings, Category::System, Category::Utility]),
-            Self::Applets => Some(&[Category::CosmicApplet]),
-            _ => None,
-        }
-    }
-
-    fn icon(&self) -> widget::icon::Icon {
-        match self {
-            Self::Explore => icon_cache_icon("store-home-symbolic", 16),
-            Self::Create => icon_cache_icon("store-create-symbolic", 16),
-            Self::Work => icon_cache_icon("store-work-symbolic", 16),
-            Self::Develop => icon_cache_icon("store-develop-symbolic", 16),
-            Self::Learn => icon_cache_icon("store-learn-symbolic", 16),
-            Self::Game => icon_cache_icon("store-game-symbolic", 16),
-            Self::Relax => icon_cache_icon("store-relax-symbolic", 16),
-            Self::Socialize => icon_cache_icon("store-socialize-symbolic", 16),
-            Self::Utilities => icon_cache_icon("store-utilities-symbolic", 16),
-            Self::Applets => icon_cache_icon("store-applets-symbolic", 16),
-            Self::Installed => icon_cache_icon("store-installed-symbolic", 16),
-            Self::Updates => icon_cache_icon("store-updates-symbolic", 16),
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
-pub enum ExplorePage {
-    EditorsChoice,
-    PopularApps,
-    MadeForCosmic,
-    NewApps,
-    RecentlyUpdated,
-    DevelopmentTools,
-    ScientificTools,
-    ProductivityApps,
-    GraphicsAndPhotographyTools,
-    SocialNetworkingApps,
-    Games,
-    MusicAndVideoApps,
-    AppsForLearning,
-    Utilities,
-}
-
-impl ExplorePage {
-    fn all() -> &'static [Self] {
-        &[
-            Self::EditorsChoice,
-            Self::PopularApps,
-            Self::MadeForCosmic,
-            //TODO: Self::NewApps,
-            Self::RecentlyUpdated,
-            Self::DevelopmentTools,
-            Self::ScientificTools,
-            Self::ProductivityApps,
-            Self::GraphicsAndPhotographyTools,
-            Self::SocialNetworkingApps,
-            Self::Games,
-            Self::MusicAndVideoApps,
-            Self::AppsForLearning,
-            Self::Utilities,
-        ]
-    }
-
-    fn title(&self) -> String {
-        match self {
-            Self::EditorsChoice => fl!("editors-choice"),
-            Self::PopularApps => fl!("popular-apps"),
-            Self::MadeForCosmic => fl!("made-for-cosmic"),
-            Self::NewApps => fl!("new-apps"),
-            Self::RecentlyUpdated => fl!("recently-updated"),
-            Self::DevelopmentTools => fl!("development-tools"),
-            Self::ScientificTools => fl!("scientific-tools"),
-            Self::ProductivityApps => fl!("productivity-apps"),
-            Self::GraphicsAndPhotographyTools => fl!("graphics-and-photography-tools"),
-            Self::SocialNetworkingApps => fl!("social-networking-apps"),
-            Self::Games => fl!("games"),
-            Self::MusicAndVideoApps => fl!("music-and-video-apps"),
-            Self::AppsForLearning => fl!("apps-for-learning"),
-            Self::Utilities => fl!("utilities"),
-        }
-    }
-
-    fn categories(&self) -> &'static [Category] {
-        match self {
-            Self::DevelopmentTools => &[Category::Development],
-            Self::ScientificTools => &[Category::Science],
-            Self::ProductivityApps => &[Category::Office],
-            Self::GraphicsAndPhotographyTools => &[Category::Graphics],
-            Self::SocialNetworkingApps => &[Category::Network],
-            Self::Games => &[Category::Game],
-            Self::MusicAndVideoApps => &[Category::AudioVideo],
-            Self::AppsForLearning => &[Category::Education],
-            Self::Utilities => &[Category::Settings, Category::System, Category::Utility],
-            _ => &[],
-        }
-    }
-}
-
-pub struct GridMetrics {
-    pub cols: usize,
-    pub item_width: usize,
-    pub column_spacing: u16,
-}
-
-impl GridMetrics {
-    pub fn new(width: usize, min_width: usize, column_spacing: u16) -> Self {
-        let width_m1 = width.saturating_sub(min_width);
-        let cols_m1 = width_m1 / (min_width + column_spacing as usize);
-        let cols = cols_m1 + 1;
-        let item_width = width
-            .saturating_sub(cols_m1 * column_spacing as usize)
-            .checked_div(cols)
-            .unwrap_or(0);
-        Self {
-            cols,
-            item_width,
-            column_spacing,
-        }
-    }
-}
-
-// Helper function to create a styled badge icon
-fn styled_badge_icon<'a>(
-    icon_name: &'static str,
-    icon_size: u16,
-    icon_color: cosmic::iced::Color,
-    _bg_color: cosmic::iced::Color,
-) -> Element<'a, Message> {
-    widget::icon::icon(icon_cache_handle(icon_name, icon_size))
-        .size(icon_size)
-        .class(cosmic::theme::Svg::Custom(std::rc::Rc::new(move |_theme| {
-            cosmic::iced::widget::svg::Style {
-                color: Some(icon_color),
-            }
-        })))
-        .into()
-}
-
-fn wayland_compat_badge<'a>(info: &'a AppInfo, icon_size: u16) -> Option<Element<'a, Message>> {
-    let compat_badge = if let Some(compat) = info.wayland_compat_lazy() {
-        match compat.risk_level {
-            RiskLevel::Low => {
-                Some(widget::tooltip(
-                    styled_badge_icon(
-                        "checkbox-checked-symbolic",
-                        icon_size,
-                        cosmic::iced::Color::from_rgb(0.15, 0.75, 0.3),
-                        cosmic::iced::Color::from_rgba(0.15, 0.75, 0.3, 0.2),
-                    ),
-                    widget::text::caption(fl!("wayland-native-tooltip")),
-                    widget::tooltip::Position::Bottom,
-                ))
-            }
-            RiskLevel::Medium => {
-                Some(widget::tooltip(
-                    styled_badge_icon(
-                        "dialog-information-symbolic",
-                        icon_size,
-                        cosmic::iced::Color::from_rgb(0.2, 0.6, 0.85),
-                        cosmic::iced::Color::from_rgba(0.2, 0.6, 0.85, 0.2),
-                    ),
-                    widget::text::caption(format!("{:?} - Good Wayland support", compat.framework)),
-                    widget::tooltip::Position::Bottom,
-                ))
-            }
-            RiskLevel::High => {
-                let tooltip_text = if matches!(compat.support, WaylandSupport::X11Only) {
-                    fl!("x11-only-tooltip")
-                } else {
-                    fl!("wayland-issues-warning")
-                };
-
-                Some(widget::tooltip(
-                    styled_badge_icon(
-                        "dialog-warning-symbolic",
-                        icon_size,
-                        cosmic::iced::Color::from_rgb(1.0, 0.55, 0.0),
-                        cosmic::iced::Color::from_rgba(1.0, 0.55, 0.0, 0.2),
-                    ),
-                    widget::text::caption(tooltip_text),
-                    widget::tooltip::Position::Bottom,
-                ))
-            }
-            RiskLevel::Critical => {
-                let tooltip_text = fl!("x11-only-tooltip");
-                Some(widget::tooltip(
-                    styled_badge_icon(
-                        "dialog-warning-symbolic",
-                        icon_size,
-                        cosmic::iced::Color::from_rgb(1.0, 0.3, 0.3),
-                        cosmic::iced::Color::from_rgba(1.0, 0.3, 0.3, 0.2),
-                    ),
-                    widget::text::caption(tooltip_text),
-                    widget::tooltip::Position::Bottom,
-                ))
-            }
-        }
-    } else {
-        Some(widget::tooltip(
-            styled_badge_icon(
-                "dialog-question-symbolic",
-                icon_size,
-                cosmic::iced::Color::from_rgb(0.5, 0.5, 0.5),
-                cosmic::iced::Color::from_rgba(0.5, 0.5, 0.5, 0.15),
-            ),
-            widget::text::caption("Wayland compatibility unknown"),
-            widget::tooltip::Position::Bottom,
-        ))
-    };
-
-    compat_badge.map(|badge| badge.into())
-}
-
-// Helper function to create a styled icon container with rounded corners
-fn styled_icon<'a>(icon: widget::icon::Handle, size: u16) -> Element<'a, Message> {
-    use cosmic::iced::{Border, Color};
-
-    widget::container(
-        widget::icon::icon(icon)
-            .size(size)
-    )
-    .padding(8)
-    .class(theme::Container::custom(move |theme| {
-        let cosmic = theme.cosmic();
-
-        // Use a slightly elevated background for better contrast
-        let base_color = cosmic.background.component.base;
-        let bg_color = Color::from_rgba(
-            (base_color.red + 0.05).min(1.0),
-            (base_color.green + 0.05).min(1.0),
-            (base_color.blue + 0.05).min(1.0),
-            base_color.alpha,
-        );
-
-        widget::container::Style {
-            icon_color: Some(cosmic.on_bg_color().into()),
-            text_color: Some(cosmic.on_bg_color().into()),
-            background: Some(bg_color.into()),
-            border: Border {
-                radius: ((size + 16) as f32 * 0.25).into(), // Larger radius accounting for padding
-                width: 1.0,
-                color: Color::from_rgba(0.0, 0.0, 0.0, 0.05),
-            },
-            shadow: cosmic::iced::Shadow {
-                color: Color::from_rgba(0.0, 0.0, 0.0, 0.15),
-                offset: cosmic::iced::Vector::new(0.0, 3.0),
-                blur_radius: 8.0,
-            },
-        }
-    }))
-    .into()
-}
-
-fn package_card_view<'a>(
-    info: &'a AppInfo,
-    icon_opt: Option<&'a widget::icon::Handle>,
-    controls: Vec<Element<'a, Message>>,
-    top_controls: Option<Vec<Element<'a, Message>>>,
-    spacing: &cosmic_theme::Spacing,
-    width: usize,
-) -> Element<'a, Message> {
-    // Only show compatibility badge for Flathub apps (only they have the data)
-    let compat_badge = if info.source_id == "flathub" {
-        wayland_compat_badge(info, 16)
-    } else {
-        None
-    };
-
-    let mut name_row = vec![
-        widget::text::body(&info.name)
-            .height(20.0)
-            .width(width as f32 - 180.0)
-            .into()
-    ];
-
-    if let Some(badge) = compat_badge {
-        name_row.push(badge);
-    }
-
-    let height = 20.0 + 28.0 + 32.0 + 3.0 * spacing.space_xxs as f32;
-    let top_row_cap = 1 + top_controls
-        .as_deref()
-        .map(|elements| 1 + elements.len())
-        .unwrap_or_default();
-    let column = widget::column::with_children(vec![
-        widget::row::with_capacity(top_row_cap)
-            .push(widget::column::with_children(vec![
-                widget::row::with_children(name_row)
-                    .spacing(spacing.space_xxs)
-                    .into(),
-                widget::text::caption(&info.summary)
-                    .height(28.0)
-                    .width(width as f32 - 180.0)
-                    .into(),
-            ]))
-            .push_maybe(top_controls.is_some().then_some(widget::horizontal_space()))
-            .extend(top_controls.unwrap_or_default())
-            .into(),
-        widget::Space::with_height(Length::Fixed(spacing.space_xxs.into())).into(),
-        widget::row::with_children(controls)
-            .height(32.0)
-            .spacing(spacing.space_xs)
-            .into(),
-    ]);
-
-    let icon: Element<_> = match icon_opt {
-        Some(icon) => styled_icon(icon.clone(), ICON_SIZE_PACKAGE),
-        None => widget::Space::with_width(ICON_SIZE_PACKAGE as f32).into(),
-    };
-
-    widget::container(
-        widget::row()
-            .push(icon)
-            .push(column)
-            .align_y(Alignment::Center)
-            .spacing(spacing.space_s),
-    )
-    .align_y(Alignment::Center)
-    .width(width as f32)
-    .height(height)
-    .padding([spacing.space_xxs, spacing.space_s])
-    .class(theme::Container::Card)
-    .into()
-}
-
 impl Package {
     pub fn grid_metrics(spacing: &cosmic_theme::Spacing, width: usize) -> GridMetrics {
         GridMetrics::new(width, 320 + 2 * spacing.space_s as usize, spacing.space_xxs)
@@ -847,199 +403,24 @@ impl Package {
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct SearchResult {
-    backend_name: &'static str,
-    id: AppId,
-    icon_opt: Option<widget::icon::Handle>,
-    // Info from selected source
-    info: Arc<AppInfo>,
-    weight: i64,
-}
-
-impl SearchResult {
-    pub fn grid_metrics(spacing: &cosmic_theme::Spacing, width: usize) -> GridMetrics {
-        GridMetrics::new(width, 240 + 2 * spacing.space_s as usize, spacing.space_xxs)
-    }
-
-    pub fn grid_view<'a, F: Fn(usize) -> Message + 'a>(
-        results: &'a [Self],
-        spacing: cosmic_theme::Spacing,
-        width: usize,
-        callback: F,
-    ) -> Element<'a, Message> {
-        let GridMetrics {
-            cols,
-            item_width,
-            column_spacing,
-        } = Self::grid_metrics(&spacing, width);
-
-        let mut grid = widget::grid();
-        let mut col = 0;
-        for (result_i, result) in results.iter().enumerate() {
-            if col >= cols {
-                grid = grid.insert_row();
-                col = 0;
-            }
-            grid = grid.push(
-                widget::mouse_area(result.card_view(&spacing, item_width))
-                    .on_press(callback(result_i)),
-            );
-            col += 1;
-        }
-        grid.column_spacing(column_spacing)
-            .row_spacing(column_spacing)
-            .into()
-    }
-
-    pub fn card_view<'a>(
-        &'a self,
-        spacing: &cosmic_theme::Spacing,
-        width: usize,
-    ) -> Element<'a, Message> {
-        // Check for editor's choice and verified status
-        let is_editors_choice = EDITORS_CHOICE
-            .iter()
-            .any(|choice_id| choice_id == &self.id.normalized());
-        let is_verified = self.info.verified;
-
-        // Always show a compatibility badge - every app gets a status indicator
-        let compat_badge = wayland_compat_badge(&self.info, 16);
-
-        let mut name_row = vec![];
-        name_row.push(widget::text::body(&self.info.name)
-            .height(Length::Fixed(20.0))
-            .into());
-
-        if let Some(badge) = compat_badge {
-            name_row.push(badge.into());
-        }
-
-
-        widget::container(
-            widget::row::with_children(vec![
-                match &self.icon_opt {
-                    Some(icon) => styled_icon(icon.clone(), ICON_SIZE_SEARCH),
-                    None => {
-                        widget::Space::with_width(Length::Fixed(ICON_SIZE_SEARCH as f32)).into()
-                    }
-                },
-                widget::column::with_children(vec![
-                    widget::row::with_children(name_row)
-                        .spacing(spacing.space_xxs)
-                        .into(),
-                    widget::text::caption(&self.info.summary)
-                        .height(Length::Fixed(28.0))
-                        .into(),
-                    widget::row::with_children(vec![
-                        if self.info.source_id == "flathub" && self.info.monthly_downloads > 0 {
-                            widget::tooltip(
-                                widget::text::caption(format_download_count(self.info.monthly_downloads)),
-                                widget::text(fl!("monthly-downloads-tooltip")),
-                                widget::tooltip::Position::Bottom,
-                            )
-                            .into()
-                        } else {
-                            widget::Space::with_width(Length::Fixed(0.0)).into()
-                        },
-                        widget::horizontal_space().into(),
-                        if is_editors_choice {
-                            widget::tooltip(
-                                widget::icon::icon(icon_cache_handle("starred-symbolic", 16))
-                                    .size(16),
-                                widget::text(fl!("editors-choice-tooltip")),
-                                widget::tooltip::Position::Bottom,
-                            )
-                            .into()
-                        } else if is_verified {
-                            widget::tooltip(
-                                widget::icon::icon(icon_cache_handle("checkmark-symbolic", 16))
-                                    .size(16),
-                                widget::text(fl!("verified-tooltip")),
-                                widget::tooltip::Position::Bottom,
-                            )
-                            .into()
-                        } else {
-                            widget::Space::with_width(Length::Fixed(0.0)).into()
-                        },
-                    ])
-                    .spacing(spacing.space_xxs)
-                    .align_y(Alignment::Center)
-                    .into()
-                ])
-                .into(),
-            ])
-            .align_y(Alignment::Center)
-            .spacing(spacing.space_s),
-        )
-        .align_y(Alignment::Center)
-        .width(Length::Fixed(width as f32))
-        .height(Length::Fixed(64.0 + (spacing.space_xxs as f32) * 2.0))
-        .padding([spacing.space_xxs, spacing.space_s])
-        .class(theme::Container::Card)
-        .into()
-    }
-}
-
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum ScrollContext {
     NavPage,
     ExplorePage,
     SearchResults,
-    Selected,
+    DetailsPage,
 }
 
 impl ScrollContext {
     fn unused_contexts(&self) -> &'static [ScrollContext] {
         // Contexts that can be safely removed when another is active
         match self {
-            Self::NavPage => &[Self::Selected, Self::SearchResults, Self::ExplorePage],
-            Self::ExplorePage => &[Self::Selected, Self::SearchResults],
-            Self::SearchResults => &[Self::Selected],
-            Self::Selected => &[],
+            Self::NavPage => &[Self::DetailsPage, Self::SearchResults, Self::ExplorePage],
+            Self::ExplorePage => &[Self::DetailsPage, Self::SearchResults],
+            Self::SearchResults => &[Self::DetailsPage],
+            Self::DetailsPage => &[],
         }
     }
-}
-
-#[derive(Clone, Debug)]
-pub struct SelectedSource {
-    backend_name: &'static str,
-    source_id: String,
-    source_name: String,
-}
-
-impl SelectedSource {
-    fn new(backend_name: &'static str, info: &AppInfo, installed: bool) -> Self {
-        SelectedSource {
-            backend_name,
-            source_id: info.source_id.clone(),
-            source_name: if installed {
-                fl!("source-installed", source = info.source_name.as_str())
-            } else {
-                info.source_name.clone()
-            },
-        }
-    }
-}
-
-// For use in dropdown widget
-impl AsRef<str> for SelectedSource {
-    fn as_ref(&self) -> &str {
-        &self.source_name
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct Selected {
-    backend_name: &'static str,
-    id: AppId,
-    icon_opt: Option<widget::icon::Handle>,
-    info: Arc<AppInfo>,
-    screenshot_images: HashMap<usize, widget::image::Handle>,
-    screenshot_shown: usize,
-    sources: Vec<SelectedSource>,
-    addons: Vec<(AppId, Arc<AppInfo>)>,
-    addons_view_more: bool,
 }
 
 /// The [`App`] stores application-specific state.
@@ -1088,9 +469,21 @@ pub struct App {
     explore_results: HashMap<ExplorePage, Vec<SearchResult>>,
     installed_results: Option<Vec<SearchResult>>,
     search_results: Option<(String, Vec<SearchResult>)>,
-    selected_opt: Option<Selected>,
+    details_page_opt: Option<DetailsPage>,
     applet_placement_buttons: cosmic::widget::segmented_button::SingleSelectModel,
     uninstall_purge_data: bool,
+}
+
+impl DetailsPageActions for App {
+    fn selected_buttons<'a>(
+        &'a self,
+        backend_name: &'static str,
+        id: &AppId,
+        info: &Arc<AppInfo>,
+        addon: bool,
+    ) -> Vec<Element<'a, Message>> {
+        self.selected_buttons_impl(backend_name, id, info, addon)
+    }
 }
 
 impl App {
@@ -1171,7 +564,7 @@ impl App {
         self.pending_operations.insert(id, (operation, 0.0));
     }
 
-    fn generic_search<F: Fn(&AppId, &AppInfo, bool) -> Option<i64> + Send + Sync>(
+    pub(crate) fn generic_search<F: Fn(&AppId, &AppInfo, bool) -> Option<i64> + Send + Sync>(
         apps: &Apps,
         backends: &Backends,
         os_codename: &str,
@@ -1205,30 +598,15 @@ impl App {
                                 continue;
                             }
                         }
-
-                        // PackageKit availability check (accurate)
-                        if *backend_name == "packagekit" && !info.pkgnames.is_empty() {
-                            if let Some(backend) = backends.get(*backend_name) {
-                                if !backend.is_package_available(&info.pkgnames) {
-                                    log::debug!(
-                                        "Filtering out {} - not available in PackageKit",
-                                        info.name
-                                    );
-                                    continue;
-                                }
-                            }
-                        }
                     }
 
                     if let Some(weight) = filter_map(id, info, *installed) {
-                        // Skip if best weight has equal or lower weight
                         if let Some(prev_weight) = best_weight {
                             if prev_weight <= weight {
                                 continue;
                             }
                         }
 
-                        // Replace best weight
                         best_weight = Some(weight);
                     }
                 }
@@ -1244,18 +622,18 @@ impl App {
                     let compat_opt = info.wayland_compat_lazy();
                     let matches_filter = match wayland_filter {
                         WaylandFilter::All => true,
-                        WaylandFilter::Excellent => {
-                            compat_opt.map(|c| c.risk_level == RiskLevel::Low).unwrap_or(false)
-                        }
-                        WaylandFilter::Good => {
-                            compat_opt.map(|c| c.risk_level == RiskLevel::Medium).unwrap_or(false)
-                        }
-                        WaylandFilter::Caution => {
-                            compat_opt.map(|c| c.risk_level == RiskLevel::High).unwrap_or(false)
-                        }
-                        WaylandFilter::Limited => {
-                            compat_opt.map(|c| c.risk_level == RiskLevel::Critical).unwrap_or(false)
-                        }
+                        WaylandFilter::Excellent => compat_opt
+                            .map(|c| c.risk_level == RiskLevel::Low)
+                            .unwrap_or(false),
+                        WaylandFilter::Good => compat_opt
+                            .map(|c| c.risk_level == RiskLevel::Medium)
+                            .unwrap_or(false),
+                        WaylandFilter::Caution => compat_opt
+                            .map(|c| c.risk_level == RiskLevel::High)
+                            .unwrap_or(false),
+                        WaylandFilter::Limited => compat_opt
+                            .map(|c| c.risk_level == RiskLevel::Critical)
+                            .unwrap_or(false),
                         WaylandFilter::Unknown => compat_opt.is_none(),
                     };
 
@@ -1264,23 +642,27 @@ impl App {
                     }
                 }
 
-                Some(SearchResult {
+                Some(SearchResult::new(
                     backend_name,
-                    id: id.clone(),
-                    icon_opt: None,
-                    info: info.clone(),
+                    id.clone(),
+                    None,
+                    info.clone(),
                     weight,
-                })
+                ))
             })
             .collect();
 
         match sort_mode {
             SearchSortMode::Relevance => {
                 results.par_sort_unstable_by(|a, b| match a.weight.cmp(&b.weight) {
-                    cmp::Ordering::Equal => match LANGUAGE_SORTER.compare(&a.info.name, &b.info.name) {
-                        cmp::Ordering::Equal => LANGUAGE_SORTER.compare(a.backend_name, b.backend_name),
-                        ordering => ordering,
-                    },
+                    cmp::Ordering::Equal => {
+                        match LANGUAGE_SORTER.compare(&a.info.name, &b.info.name) {
+                            cmp::Ordering::Equal => {
+                                LANGUAGE_SORTER.compare(a.backend_name(), b.backend_name())
+                            }
+                            ordering => ordering,
+                        }
+                    }
                     ordering => ordering,
                 });
             }
@@ -1305,8 +687,16 @@ impl App {
             SearchSortMode::BestWaylandSupport => {
                 use crate::app_info::RiskLevel;
                 results.par_sort_unstable_by(|a, b| {
-                    let a_risk = a.info.wayland_compat_lazy().map(|c| c.risk_level).unwrap_or(RiskLevel::Critical);
-                    let b_risk = b.info.wayland_compat_lazy().map(|c| c.risk_level).unwrap_or(RiskLevel::Critical);
+                    let a_risk = a
+                        .info
+                        .wayland_compat_lazy()
+                        .map(|c| c.risk_level)
+                        .unwrap_or(RiskLevel::Critical);
+                    let b_risk = b
+                        .info
+                        .wayland_compat_lazy()
+                        .map(|c| c.risk_level)
+                        .unwrap_or(RiskLevel::Critical);
 
                     // Lower risk level = better (Low=0, Medium=1, High=2, Critical=3)
                     let a_score = match a_risk {
@@ -1332,7 +722,7 @@ impl App {
         // Load only enough icons to show one page of results
         //TODO: load in background
         for result in results.iter_mut().take(MAX_RESULTS) {
-            let Some(backend) = backends.get(result.backend_name) else {
+            let Some(backend) = backends.get(result.backend_name()) else {
                 continue;
             };
             let appstream_caches = backend.info_caches();
@@ -1356,8 +746,11 @@ impl App {
                 tokio::task::spawn_blocking(move || {
                     let start = Instant::now();
                     let applet_provide = AppProvide::Id("com.system76.CosmicApplet".to_string());
-                    let results =
-                        Self::generic_search(&apps, &backends, &os_codename, |_id, info, _installed| {
+                    let results = Self::generic_search(
+                        &apps,
+                        &backends,
+                        &os_codename,
+                        |_id, info, _installed| {
                             if !matches!(info.kind, AppKind::DesktopApplication) {
                                 return None;
                             }
@@ -1375,7 +768,10 @@ impl App {
                                 }
                             }
                             None
-                        }, SearchSortMode::Relevance, WaylandFilter::All);
+                        },
+                        SearchSortMode::Relevance,
+                        WaylandFilter::All,
+                    );
                     let duration = start.elapsed();
                     log::info!(
                         "searched for categories {:?} in {:?}, found {} results",
@@ -1403,39 +799,72 @@ impl App {
                     let start = Instant::now();
                     let now = chrono::Utc::now().timestamp();
                     let results = match explore_page {
-                        ExplorePage::EditorsChoice => Self::generic_search(&apps, &backends, &os_codename, |id, _info, _installed | {
-                            EDITORS_CHOICE
-                            .iter()
-                            .position(|choice_id| choice_id == &id.normalized())
-                            .map(|x| x as i64)
-                        }, SearchSortMode::Relevance, WaylandFilter::All),
-                        ExplorePage::PopularApps => Self::generic_search(&apps, &backends, &os_codename, |_id, info, _installed| {
-                            if !matches!(info.kind, AppKind::DesktopApplication) {
-                                return None;
-                            }
-                            Some(-(info.monthly_downloads as i64))
-                        }, SearchSortMode::Relevance, WaylandFilter::All),
-                        ExplorePage::MadeForCosmic => {
-                            let provide = AppProvide::Id("com.system76.CosmicApplication".to_string());
-                            Self::generic_search(&apps, &backends, &os_codename, |_id, info, _installed| {
+                        ExplorePage::EditorsChoice => Self::generic_search(
+                            &apps,
+                            &backends,
+                            &os_codename,
+                            |id, _info, _installed| {
+                                EDITORS_CHOICE
+                                    .iter()
+                                    .position(|choice_id| choice_id == &id.normalized())
+                                    .map(|x| x as i64)
+                            },
+                            SearchSortMode::Relevance,
+                            WaylandFilter::All,
+                        ),
+                        ExplorePage::PopularApps => Self::generic_search(
+                            &apps,
+                            &backends,
+                            &os_codename,
+                            |_id, info, _installed| {
                                 if !matches!(info.kind, AppKind::DesktopApplication) {
                                     return None;
                                 }
-                                if info.provides.contains(&provide) {
-                                    Some(-(info.monthly_downloads as i64))
-                                } else {
+                                Some(-(info.monthly_downloads as i64))
+                            },
+                            SearchSortMode::Relevance,
+                            WaylandFilter::All,
+                        ),
+                        ExplorePage::MadeForCosmic => {
+                            let provide =
+                                AppProvide::Id("com.system76.CosmicApplication".to_string());
+                            Self::generic_search(
+                                &apps,
+                                &backends,
+                                &os_codename,
+                                |_id, info, _installed| {
+                                    if !matches!(info.kind, AppKind::DesktopApplication) {
+                                        return None;
+                                    }
+                                    if info.provides.contains(&provide) {
+                                        Some(-(info.monthly_downloads as i64))
+                                    } else {
+                                        None
+                                    }
+                                },
+                                SearchSortMode::Relevance,
+                                WaylandFilter::All,
+                            )
+                        }
+                        ExplorePage::NewApps => Self::generic_search(
+                            &apps,
+                            &backends,
+                            &os_codename,
+                                |_id, _info, _installed| {
+                                    //TODO
                                     None
+                                },
+                            SearchSortMode::Relevance,
+                            WaylandFilter::All,
+                        ),
+                        ExplorePage::RecentlyUpdated => Self::generic_search(
+                            &apps,
+                            &backends,
+                            &os_codename,
+                            |id, info, _installed| {
+                                if !matches!(info.kind, AppKind::DesktopApplication) {
+                                    return None;
                                 }
-                            }, SearchSortMode::Relevance, WaylandFilter::All)
-                        },
-                        ExplorePage::NewApps => Self::generic_search(&apps, &backends, &os_codename, |_id, _info, _installed| {
-                            //TODO
-                            None
-                        }, SearchSortMode::Relevance, WaylandFilter::All),
-                        ExplorePage::RecentlyUpdated => Self::generic_search(&apps, &backends, &os_codename, |id, info, _installed| {
-                            if !matches!(info.kind, AppKind::DesktopApplication) {
-                                return None;
-                            }
                             // Finds the newest release and sorts from newest to oldest
                             //TODO: appstream release info is often incomplete
                             let mut min_weight = 0;
@@ -1447,17 +876,29 @@ impl App {
                                             min_weight = weight;
                                         }
                                     } else {
-                                        log::info!("{:?} has release timestamp {} which is past the present {}", id, timestamp, now);
+                                        log::info!(
+                                            "{:?} has release timestamp {} which is past the present {}",
+                                            id,
+                                            timestamp,
+                                            now
+                                        );
                                     }
                                 }
                             }
                             Some(min_weight)
-                        }, SearchSortMode::Relevance, WaylandFilter::All),
+                            },
+                            SearchSortMode::Relevance,
+                            WaylandFilter::All,
+                        ),
                         _ => {
                             let categories = explore_page.categories();
-                            Self::generic_search(&apps, &backends, &os_codename, |_id, info, _installed| {
-                                if !matches!(info.kind, AppKind::DesktopApplication) {
-                                    return None;
+                            Self::generic_search(
+                                &apps,
+                                &backends,
+                                &os_codename,
+                                |_id, info, _installed| {
+                                    if !matches!(info.kind, AppKind::DesktopApplication) {
+                                        return None;
                                 }
                                 for category in categories {
                                     //TODO: contains doesn't work due to type mismatch
@@ -1493,13 +934,20 @@ impl App {
             async move {
                 tokio::task::spawn_blocking(move || {
                     let start = Instant::now();
-                    let results = Self::generic_search(&apps, &backends, &os_codename, |id, _info, installed| {
-                        if installed {
-                            Some(if id.is_system() { -1 } else { 0 })
-                        } else {
-                            None
-                        }
-                    }, SearchSortMode::Relevance, WaylandFilter::All);
+                    let results = Self::generic_search(
+                        &apps,
+                        &backends,
+                        &os_codename,
+                        |id, _info, installed| {
+                            if installed {
+                                Some(if id.is_system() { -1 } else { 0 })
+                            } else {
+                                None
+                            }
+                        },
+                        SearchSortMode::Relevance,
+                        WaylandFilter::All,
+                    );
                     let duration = start.elapsed();
                     log::info!(
                         "searched for installed in {:?}, found {} results",
@@ -1522,14 +970,27 @@ impl App {
         if let Ok(url) = reqwest::Url::parse(&input) {
             match url.scheme() {
                 "appstream" => {
-                    return self.handle_appstream_url(input, url.path());
+                    return url_handlers::handle_appstream_url(
+                        &self.apps,
+                        &self.backends,
+                        &self.os_codename,
+                        input,
+                        url.path(),
+                    );
                 }
                 "file" => {
-                    return self.handle_file_url(input, url.path());
+                    return url_handlers::handle_file_url(&self.backends, input, url.path());
                 }
                 "mime" => {
-                    // This is a workaround to be able to search for mime handlers, mime is not a real URL scheme
-                    return self.handle_mime_url(input, url.path());
+                    // This is a workaround to be able to search for mime handlers,
+                    // mime is not a real URL scheme
+                    return url_handlers::handle_mime_url(
+                        &self.apps,
+                        &self.backends,
+                        &self.os_codename,
+                        input,
+                        url.path(),
+                    );
                 }
                 scheme => {
                     log::warn!("unsupported URL scheme {scheme} in {url}");
@@ -1539,12 +1000,16 @@ impl App {
 
         // Also handle standard file paths
         if input.starts_with("/") && Path::new(&input).is_file() {
-            return self.handle_file_url(input.clone(), &input);
+            return url_handlers::handle_file_url(&self.backends, input.clone(), &input);
         }
 
         // Also handle gstreamer codec strings
         if let Some(gstreamer_codec) = GStreamerCodec::parse(&input) {
-            return self.handle_gstreamer_codec(input.clone(), gstreamer_codec);
+            return url_handlers::handle_gstreamer_codec(
+                &self.backends,
+                input.clone(),
+                gstreamer_codec,
+            );
         }
 
         let pattern = regex::escape(&input);
@@ -1567,43 +1032,47 @@ impl App {
             async move {
                 tokio::task::spawn_blocking(move || {
                     let start = Instant::now();
-                    let results = Self::generic_search(&apps, &backends, &os_codename, |_id, info, _installed| {
-                        if !matches!(info.kind, AppKind::DesktopApplication) {
-                            return None;
-                        }
-                        //TODO: improve performance
-                        let stats_weight = |weight: i64| -> i64 {
-                            //TODO: make sure no overflows
-                            (weight << 56) - (info.monthly_downloads as i64)
-                        };
-
-                        //TODO: fuzzy match (nucleus-matcher?)
-                        let regex_weight = |string: &str, weight: i64| -> Option<i64> {
-                            let mat = regex.find(string)?;
-                            if mat.range().start == 0 {
-                                if mat.range().end == string.len() {
-                                    // String equals search phrase
-                                    Some(stats_weight(weight + 0))
-                                } else {
-                                    // String starts with search phrase
-                                    Some(stats_weight(weight + 1))
-                                }
-                            } else {
-                                // String contains search phrase
-                                Some(stats_weight(weight + 2))
+                    let results = Self::generic_search(
+                        &apps,
+                        &backends,
+                        &os_codename,
+                        |_id, info, _installed| {
+                            if !matches!(info.kind, AppKind::DesktopApplication) {
+                                return None;
                             }
-                        };
-                        if let Some(weight) = regex_weight(&info.name, 0) {
-                            return Some(weight);
-                        }
-                        if let Some(weight) = regex_weight(&info.summary, 3) {
-                            return Some(weight);
-                        }
-                        if let Some(weight) = regex_weight(&info.description, 6) {
-                            return Some(weight);
-                        }
-                        None
-                    }, sort_mode, wayland_filter);
+                            //TODO: improve performance
+                            let stats_weight = |weight: i64| -> i64 {
+                                //TODO: make sure no overflows
+                                (weight << 56) - (info.monthly_downloads as i64)
+                            };
+
+                            //TODO: fuzzy match (nucleus-matcher?)
+                            let regex_weight = |string: &str, weight: i64| -> Option<i64> {
+                                let mat = regex.find(string)?;
+                                if mat.range().start == 0 {
+                                    if mat.range().end == string.len() {
+                                        Some(stats_weight(weight))
+                                    } else {
+                                        Some(stats_weight(weight + 1))
+                                    }
+                                } else {
+                                    Some(stats_weight(weight + 2))
+                                }
+                            };
+                            if let Some(weight) = regex_weight(&info.name, 0) {
+                                return Some(weight);
+                            }
+                            if let Some(weight) = regex_weight(&info.summary, 3) {
+                                return Some(weight);
+                            }
+                            if let Some(weight) = regex_weight(&info.description, 6) {
+                                return Some(weight);
+                            }
+                            None
+                        },
+                        sort_mode,
+                        wayland_filter,
+                    );
                     let duration = start.elapsed();
                     log::info!(
                         "searched for {:?} in {:?}, found {} results",
@@ -1620,7 +1089,7 @@ impl App {
         )
     }
 
-    fn selected_buttons(
+    fn selected_buttons_impl(
         &self,
         selected_backend_name: &'static str,
         selected_id: &AppId,
@@ -1814,23 +1283,20 @@ impl App {
         );
         let sources = self.selected_sources(backend_name, &id, &info);
         let addons = self.selected_addons(backend_name, &id, &info);
-        self.selected_opt = Some(Selected {
+        self.details_page_opt = Some(DetailsPage::new(
             backend_name,
             id,
             icon_opt,
             info,
-            screenshot_images: HashMap::new(),
-            screenshot_shown: 0,
             sources,
             addons,
-            addons_view_more: false,
-        });
+        ));
         self.update_scroll()
     }
 
     fn scroll_context(&self) -> ScrollContext {
-        if self.selected_opt.is_some() {
-            ScrollContext::Selected
+        if self.details_page_opt.is_some() {
+            ScrollContext::DetailsPage
         } else if self.search_results.is_some() {
             ScrollContext::SearchResults
         } else if self.explore_page_opt.is_some() {
@@ -1885,6 +1351,493 @@ impl App {
         cosmic::command::set_theme(self.config.app_theme.theme())
     }
 
+    fn handle_config_message(&mut self, message: Message) -> Task<Message> {
+        // Helper for updating config values efficiently
+        macro_rules! config_set {
+            ($name: ident, $value: expr) => {
+                match &self.config_handler {
+                    Some(config_handler) => {
+                        match paste::paste! { self.config.[<set_ $name>](config_handler, $value) } {
+                            Ok(_) => {}
+                            Err(err) => {
+                                log::warn!(
+                                    "failed to save config {:?}: {}",
+                                    stringify!($name),
+                                    err
+                                );
+                            }
+                        }
+                    }
+                    None => {
+                        self.config.$name = $value;
+                        log::warn!(
+                            "failed to save config {:?}: no config handler",
+                            stringify!($name)
+                        );
+                    }
+                }
+            };
+        }
+
+        match message {
+            Message::AppTheme(app_theme) => {
+                config_set!(app_theme, app_theme);
+                self.update_config()
+            }
+            Message::Config(config) => {
+                if config != self.config {
+                    log::info!("update config");
+                    self.config = config;
+                    self.update_config()
+                } else {
+                    Task::none()
+                }
+            }
+            Message::SystemThemeModeChange(_theme_mode) => self.update_config(),
+            _ => Task::none(),
+        }
+    }
+
+    fn handle_search_message(&mut self, message: Message) -> Task<Message> {
+        match message {
+            Message::CategoryResults(categories, results) => {
+                self.category_results = Some((categories, results));
+                self.update_scroll()
+            }
+            Message::SearchActivate => {
+                self.search_active = true;
+                widget::text_input::focus(self.search_id.clone())
+            }
+            Message::SearchClear => {
+                self.search_active = false;
+                self.search_input.clear();
+                if self.search_results.take().is_some() {
+                    self.update_scroll()
+                } else {
+                    Task::none()
+                }
+            }
+            Message::SearchInput(input) => {
+                if input != self.search_input {
+                    self.search_input = input;
+                    if !self.search_input.is_empty() {
+                        self.search()
+                    } else {
+                        Task::none()
+                    }
+                } else {
+                    Task::none()
+                }
+            }
+            Message::SearchResults(input, results, auto_select) => {
+                if input == self.search_input {
+                    self.details_page_opt = None;
+                    if auto_select && results.len() == 1 {
+                        let _ = self.select(
+                            results[0].backend_name(),
+                            results[0].id.clone(),
+                            results[0].icon_opt.clone(),
+                            results[0].info.clone(),
+                        );
+                    }
+                    let mut tasks = Vec::with_capacity(2);
+                    match &mut self.mode {
+                        Mode::Normal => {}
+                        Mode::GStreamer { selected, .. } => {
+                            selected.clear();
+                            if results.is_empty() {
+                                return self.handle_search_message(Message::GStreamerExit(
+                                    GStreamerExitCode::NotFound,
+                                ));
+                            }
+                            for (i, result) in results.iter().enumerate() {
+                                if Self::is_installed_inner(
+                                    &self.installed,
+                                    result.backend_name(),
+                                    &result.id,
+                                    &result.info,
+                                ) {
+                                    selected.insert(i);
+                                }
+                            }
+                            if self.core.main_window_id().is_none() {
+                                let size = Size::new(640.0, 464.0);
+                                let mut settings = window::Settings {
+                                    decorations: false,
+                                    exit_on_close_request: false,
+                                    min_size: Some(size),
+                                    resizable: true,
+                                    size,
+                                    transparent: true,
+                                    ..Default::default()
+                                };
+                                #[cfg(target_os = "linux")]
+                                {
+                                    settings.platform_specific.application_id =
+                                        "com.system76.CosmicStoreDialog".to_string();
+                                }
+                                let (window_id, task) = window::open(settings);
+                                self.core.set_main_window_id(Some(window_id));
+                                tasks.push(task.map(|_id| action::none()));
+                            }
+                        }
+                    }
+                    self.search_results = Some((input, results));
+                    tasks.push(self.update_scroll());
+                    Task::batch(tasks)
+                } else {
+                    log::warn!(
+                        "received {} results for {:?} after search changed to {:?}",
+                        results.len(),
+                        input,
+                        self.search_input
+                    );
+                    Task::none()
+                }
+            }
+            Message::SearchSubmit(_search_input) => {
+                if !self.search_input.is_empty() {
+                    self.search()
+                } else {
+                    Task::none()
+                }
+            }
+            Message::SearchSortMode(sort_mode) => {
+                self.search_sort_mode = sort_mode;
+                if !self.search_input.is_empty() {
+                    self.search()
+                } else {
+                    Task::none()
+                }
+            }
+            Message::WaylandFilter(filter) => {
+                self.wayland_filter = filter;
+                if !self.search_input.is_empty() {
+                    self.search()
+                } else {
+                    Task::none()
+                }
+            }
+            Message::GStreamerExit(_) => {
+                // This is a bit of a hack since GStreamerExit is in the main loop but used here
+                self.update(message)
+            }
+            _ => Task::none(),
+        }
+    }
+
+    fn handle_backend_message(&mut self, message: Message) -> Task<Message> {
+        match message {
+            Message::Backends(backends) => {
+                self.backends = backends;
+                self.repos_changing.clear();
+                let mut tasks = Vec::with_capacity(2);
+                tasks.push(self.update_installed());
+                match self.mode {
+                    Mode::Normal => {
+                        tasks.push(self.update_updates());
+                    }
+                    Mode::GStreamer { .. } => {}
+                }
+                Task::batch(tasks)
+            }
+            Message::CheckUpdates => self.update_updates(),
+            Message::UpdateAll => {
+                let ops: Vec<_> = self
+                    .updates
+                    .as_ref()
+                    .map(|updates| {
+                        updates
+                            .iter()
+                            .map(|(backend_name, package)| Operation {
+                                kind: OperationKind::Update,
+                                backend_name,
+                                package_ids: vec![package.id.clone()],
+                                infos: vec![package.info.clone()],
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                for op in ops {
+                    self.operation(op);
+                }
+                Task::none()
+            }
+            Message::Updates(updates) => {
+                self.updates = Some(updates);
+                Task::none()
+            }
+            _ => Task::none(),
+        }
+    }
+
+    fn handle_dialog_message(&mut self, message: Message) -> Task<Message> {
+        match message {
+            Message::DialogCancel => {
+                self.dialog_pages.pop_front();
+            }
+            Message::DialogConfirm => {
+                if let Some(page) = self.dialog_pages.pop_front() {
+                    match page {
+                        DialogPage::RepositoryRemove(backend_name, repo_rm) => {
+                            self.operation(Operation {
+                                kind: OperationKind::RepositoryRemove(repo_rm.rms, false),
+                                backend_name,
+                                package_ids: Vec::new(),
+                                infos: Vec::new(),
+                            });
+                        }
+                        DialogPage::Uninstall(backend_name, id, info) => {
+                            self.operation(Operation {
+                                kind: OperationKind::Uninstall {
+                                    purge_data: self.uninstall_purge_data,
+                                },
+                                backend_name,
+                                package_ids: vec![id],
+                                infos: vec![info],
+                            });
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            Message::DialogPage(page) => {
+                self.dialog_pages.push_back(page);
+            }
+            _ => {}
+        }
+        Task::none()
+    }
+
+    fn handle_operation_message(&mut self, message: Message) -> Task<Message> {
+        match message {
+            Message::Operation(kind, backend_name, package_id, info) => {
+                self.operation(Operation {
+                    kind,
+                    backend_name,
+                    package_ids: vec![package_id],
+                    infos: vec![info],
+                });
+                Task::none()
+            }
+            Message::PendingComplete(id) => {
+                if let Some((op, _)) = self.pending_operations.remove(&id) {
+                    self.progress_operations.remove(&id);
+                    match &op.kind {
+                        OperationKind::RepositoryAdd(_) | OperationKind::RepositoryRemove(_, _) => {
+                            self.repos_changing.retain(|(backend_name, _repo_id, _)| {
+                                backend_name != &op.backend_name
+                            });
+                            return self.update_backends(true);
+                        }
+                        _ => {
+                            return Task::batch(vec![
+                                self.update_installed(),
+                                self.update_updates(),
+                            ]);
+                        }
+                    }
+                }
+                Task::none()
+            }
+            Message::PendingError(id, _err) => {
+                self.progress_operations.remove(&id);
+                if let Some((op, _)) = self.pending_operations.remove(&id) {
+                    match &op.kind {
+                        OperationKind::RepositoryAdd(_) | OperationKind::RepositoryRemove(_, _) => {
+                            self.repos_changing
+                                .retain(|(backend_name, _, _)| backend_name != &op.backend_name);
+                        }
+                        _ => {}
+                    }
+                }
+                self.dialog_pages.push_back(DialogPage::FailedOperation(id));
+                Task::none()
+            }
+            Message::PendingProgress(id, progress) => {
+                if let Some((_, p)) = self.pending_operations.get_mut(&id) {
+                    *p = progress;
+                }
+                Task::none()
+            }
+            Message::RepositoryAdd(backend_name, repo_add) => {
+                self.operation(Operation {
+                    kind: OperationKind::RepositoryAdd(repo_add),
+                    backend_name,
+                    package_ids: Vec::new(),
+                    infos: Vec::new(),
+                });
+                Task::none()
+            }
+            Message::RepositoryAddDialog(_backend_name) => {
+                // Repository add dialog is handled elsewhere
+                Task::none()
+            }
+            _ => Task::none(),
+        }
+    }
+
+    fn handle_selection_message(&mut self, message: Message) -> Task<Message> {
+        match message {
+            Message::Select(backend_name, id, icon, info) => {
+                self.select(backend_name, id, icon, info)
+            }
+            Message::SelectInstalled(result_i) => {
+                if let Some(results) = &self.installed_results {
+                    match results.get(result_i) {
+                        Some(result) => self.select(
+                            result.backend_name(),
+                            result.id.clone(),
+                            result.icon_opt.clone(),
+                            result.info.clone(),
+                        ),
+                        None => {
+                            log::error!("failed to find installed result with index {}", result_i);
+                            Task::none()
+                        }
+                    }
+                } else {
+                    Task::none()
+                }
+            }
+            Message::SelectUpdates(updates_i) => {
+                if let Some(updates) = &self.updates {
+                    match updates
+                        .get(updates_i)
+                        .map(|(backend_name, package)| (backend_name, package.clone()))
+                    {
+                        Some((backend_name, package)) => {
+                            self.select(backend_name, package.id, Some(package.icon), package.info)
+                        }
+                        None => {
+                            log::error!("failed to find updates package with index {}", updates_i);
+                            Task::none()
+                        }
+                    }
+                } else {
+                    Task::none()
+                }
+            }
+            Message::SelectNone => {
+                self.details_page_opt = None;
+                self.update_scroll()
+            }
+            Message::SelectCategoryResult(result_i) => {
+                if let Some((_, results)) = &self.category_results {
+                    match results.get(result_i) {
+                        Some(result) => self.select(
+                            result.backend_name(),
+                            result.id.clone(),
+                            result.icon_opt.clone(),
+                            result.info.clone(),
+                        ),
+                        None => {
+                            log::error!("failed to find category result with index {}", result_i);
+                            Task::none()
+                        }
+                    }
+                } else {
+                    Task::none()
+                }
+            }
+            Message::SelectExploreResult(explore_page, result_i) => {
+                if let Some(results) = self.explore_results.get(&explore_page) {
+                    match results.get(result_i) {
+                        Some(result) => self.select(
+                            result.backend_name(),
+                            result.id.clone(),
+                            result.icon_opt.clone(),
+                            result.info.clone(),
+                        ),
+                        None => {
+                            log::error!(
+                                "failed to find {:?} result with index {}",
+                                explore_page,
+                                result_i
+                            );
+                            Task::none()
+                        }
+                    }
+                } else {
+                    Task::none()
+                }
+            }
+            Message::SelectSearchResult(result_i) => {
+                if let Some((_input, results)) = &self.search_results {
+                    match results.get(result_i) {
+                        Some(result) => self.select(
+                            result.backend_name(),
+                            result.id.clone(),
+                            result.icon_opt.clone(),
+                            result.info.clone(),
+                        ),
+                        None => {
+                            log::error!("failed to find search result with index {}", result_i);
+                            Task::none()
+                        }
+                    }
+                } else {
+                    Task::none()
+                }
+            }
+            Message::SelectedAddonsViewMore(_)
+            | Message::SelectedScreenshot(_, _, _)
+            | Message::SelectedScreenshotShown(_) => {
+                if let Some(details_page) = &mut self.details_page_opt {
+                    details_page.update(&message)
+                } else {
+                    Task::none()
+                }
+            }
+
+            Message::SelectedSource(i) => {
+                let mut next_ids = None;
+                if let Some(selected) = &self.details_page_opt {
+                    if let Some(source) = selected.sources.get(i) {
+                        next_ids = Some((
+                            source.backend_name,
+                            source.source_id.clone(),
+                            selected.id.clone(),
+                        ));
+                    }
+                }
+                if let Some((backend_name, source_id, id)) = next_ids {
+                    if let Some(backend) = self.backends.get(backend_name) {
+                        for appstream_cache in backend.info_caches() {
+                            if appstream_cache.source_id == source_id {
+                                if let Some(info) = appstream_cache.infos.get(&id) {
+                                    return self.select(
+                                        backend_name,
+                                        id,
+                                        Some(appstream_cache.icon(info)),
+                                        info.clone(),
+                                    );
+                                }
+                            }
+                        }
+                    }
+                    if let Some(installed) = &self.installed {
+                        for (installed_backend_name, package) in installed {
+                            if installed_backend_name == &backend_name
+                                && package.info.source_id == source_id
+                                && package.id == id
+                            {
+                                return self.select(
+                                    backend_name,
+                                    id,
+                                    Some(package.icon.clone()),
+                                    package.info.clone(),
+                                );
+                            }
+                        }
+                    }
+                }
+                Task::none()
+            }
+            _ => Task::none(),
+        }
+    }
+
     fn is_installed_inner(
         installed_opt: &Option<Vec<(&'static str, Package)>>,
         backend_name: &'static str,
@@ -1930,8 +1883,8 @@ impl App {
         let start = Instant::now();
         let mut apps = Apps::new();
 
-        let entry_sort = |a: &AppEntry, b: &AppEntry, id: &AppId| {
-            match b.installed.cmp(&a.installed) {
+        let entry_sort =
+            |a: &AppEntry, b: &AppEntry, id: &AppId| match b.installed.cmp(&a.installed) {
                 cmp::Ordering::Equal => {
                     let a_priority = priority(a.backend_name, &a.info.source_id, id);
                     let b_priority = priority(b.backend_name, &b.info.source_id, id);
@@ -1948,8 +1901,7 @@ impl App {
                     }
                 }
                 ordering => ordering,
-            }
-        };
+            };
 
         //TODO: par_iter?
         for (backend_name, backend) in self.backends.iter() {
@@ -1985,11 +1937,11 @@ impl App {
 
         // Update selected sources
         {
-            let sources_opt = self.selected_opt.as_ref().map(|selected| {
+            let sources_opt = self.details_page_opt.as_ref().map(|selected| {
                 self.selected_sources(selected.backend_name, &selected.id, &selected.info)
             });
             if let Some(sources) = sources_opt {
-                if let Some(selected) = &mut self.selected_opt {
+                if let Some(selected) = &mut self.details_page_opt {
                     selected.sources = sources;
                 }
             }
@@ -2008,23 +1960,26 @@ impl App {
         Task::perform(
             async move {
                 tokio::task::spawn_blocking(move || {
-                    let mut installed = Vec::new();
-                    //TODO: par_iter?
-                    for (backend_name, backend) in backends.iter() {
-                        let start = Instant::now();
-                        match backend.installed() {
-                            Ok(packages) => {
-                                for package in packages {
-                                    installed.push((*backend_name, package));
+                    let mut installed: Vec<(&'static str, Package)> = backends
+                        .par_iter()
+                        .flat_map(|(backend_name, backend)| {
+                            let start = Instant::now();
+                            let mut installed = Vec::new();
+                            match backend.installed() {
+                                Ok(packages) => {
+                                    for package in packages {
+                                        installed.push((*backend_name, package));
+                                    }
+                                }
+                                Err(err) => {
+                                    log::error!("failed to list installed: {}", err);
                                 }
                             }
-                            Err(err) => {
-                                log::error!("failed to list installed: {}", err);
-                            }
-                        }
-                        let duration = start.elapsed();
-                        log::info!("loaded installed from {} in {:?}", backend_name, duration);
-                    }
+                            let duration = start.elapsed();
+                            log::info!("loaded installed from {} in {:?}", backend_name, duration);
+                            installed
+                        })
+                        .collect();
                     installed.par_sort_unstable_by(|a, b| {
                         let a_is_system = a.1.id.is_system();
                         let b_is_system = b.1.id.is_system();
@@ -2050,23 +2005,26 @@ impl App {
         Task::perform(
             async move {
                 tokio::task::spawn_blocking(move || {
-                    let mut updates = Vec::new();
-                    //TODO: par_iter?
-                    for (backend_name, backend) in backends.iter() {
-                        let start = Instant::now();
-                        match backend.updates() {
-                            Ok(packages) => {
-                                for package in packages {
-                                    updates.push((*backend_name, package));
+                    let mut updates: Vec<(&'static str, Package)> = backends
+                        .par_iter()
+                        .flat_map(|(backend_name, backend)| {
+                            let start = Instant::now();
+                            let mut updates = Vec::new();
+                            match backend.updates() {
+                                Ok(packages) => {
+                                    for package in packages {
+                                        updates.push((*backend_name, package));
+                                    }
+                                }
+                                Err(err) => {
+                                    log::error!("failed to list updates: {}", err);
                                 }
                             }
-                            Err(err) => {
-                                log::error!("failed to list updates: {}", err);
-                            }
-                        }
-                        let duration = start.elapsed();
-                        log::info!("loaded updates from {} in {:?}", backend_name, duration);
-                    }
+                            let duration = start.elapsed();
+                            log::info!("loaded updates from {} in {:?}", backend_name, duration);
+                            updates
+                        })
+                        .collect();
                     updates.par_sort_unstable_by(|a, b| {
                         if a.1.id.is_system() {
                             cmp::Ordering::Less
@@ -2077,207 +2035,6 @@ impl App {
                         }
                     });
                     action::app(Message::Updates(updates))
-                })
-                .await
-                .unwrap_or(action::none())
-            },
-            |x| x,
-        )
-    }
-
-    fn update_notification(&mut self) -> Task<Message> {
-        // Handle closing notification if there are no operations
-        if self.pending_operations.is_empty() {
-            #[cfg(feature = "notify")]
-            if let Some(notification_arc) = self.notification_opt.take() {
-                return Task::perform(
-                    async move {
-                        tokio::task::spawn_blocking(move || {
-                            //TODO: this is nasty
-                            let notification_mutex = Arc::try_unwrap(notification_arc).unwrap();
-                            let notification = notification_mutex.into_inner().unwrap();
-                            notification.close();
-                        })
-                        .await
-                        .unwrap();
-                        action::app(Message::MaybeExit)
-                    },
-                    |x| x,
-                );
-            }
-        }
-
-        Task::none()
-    }
-
-    fn handle_appstream_url(&self, input: String, path: &str) -> Task<Message> {
-        // Handler for appstream:component-id as described in:
-        // https://freedesktop.org/software/appstream/docs/sect-AppStream-Misc-URIHandler.html
-        let apps = self.apps.clone();
-        let backends = self.backends.clone();
-        let os_codename = self.os_codename.clone();
-        let component_id = AppId::new(path.trim_start_matches('/'));
-        Task::perform(
-            async move {
-                tokio::task::spawn_blocking(move || {
-                    let start = Instant::now();
-                    let results =
-                        Self::generic_search(&apps, &backends, &os_codename, |id, _info, _installed| {
-                            //TODO: fuzzy search with lower weight?
-                            if id == &component_id { Some(0) } else { None }
-                        }, SearchSortMode::Relevance, WaylandFilter::All);
-                    let duration = start.elapsed();
-                    log::info!(
-                        "searched for ID {:?} in {:?}, found {} results",
-                        component_id,
-                        duration,
-                        results.len()
-                    );
-                    action::app(Message::SearchResults(input, results, true))
-                })
-                .await
-                .unwrap_or(action::none())
-            },
-            |x| x,
-        )
-    }
-
-    fn handle_file_url(&self, input: String, path: &str) -> Task<Message> {
-        let path = path.to_string();
-        let backends = self.backends.clone();
-        Task::perform(
-            async move {
-                tokio::task::spawn_blocking(move || {
-                    let start = Instant::now();
-                    let mut packages = Vec::new();
-                    for (backend_name, backend) in backends.iter() {
-                        match backend.file_packages(&path) {
-                            Ok(backend_packages) => {
-                                for package in backend_packages {
-                                    packages.push((backend_name, package));
-                                }
-                            }
-                            Err(err) => {
-                                log::warn!(
-                                    "failed to load file {:?} using backend {:?}: {}",
-                                    path,
-                                    backend_name,
-                                    err
-                                );
-                            }
-                        }
-                    }
-                    let duration = start.elapsed();
-                    log::info!(
-                        "loaded file {:?} in {:?}, found {} packages",
-                        path,
-                        duration,
-                        packages.len()
-                    );
-
-                    //TODO: store the resolved packages somewhere
-                    let mut results = Vec::with_capacity(packages.len());
-                    for (backend_name, package) in packages {
-                        results.push(SearchResult {
-                            backend_name,
-                            id: package.id,
-                            icon_opt: Some(package.icon),
-                            info: package.info,
-                            weight: 0,
-                        });
-                    }
-                    action::app(Message::SearchResults(input, results, true))
-                })
-                .await
-                .unwrap_or(action::none())
-            },
-            |x| x,
-        )
-    }
-
-    fn handle_gstreamer_codec(
-        &self,
-        input: String,
-        gstreamer_codec: GStreamerCodec,
-    ) -> Task<Message> {
-        let backends = self.backends.clone();
-        Task::perform(
-            async move {
-                tokio::task::spawn_blocking(move || {
-                    let start = Instant::now();
-                    let mut packages = Vec::new();
-                    for (backend_name, backend) in backends.iter() {
-                        match backend.gstreamer_packages(&gstreamer_codec) {
-                            Ok(backend_packages) => {
-                                for package in backend_packages {
-                                    packages.push((backend_name, package));
-                                }
-                            }
-                            Err(err) => {
-                                log::warn!(
-                                    "failed to load gstreamer codec {:?} using backend {:?}: {}",
-                                    gstreamer_codec,
-                                    backend_name,
-                                    err
-                                );
-                            }
-                        }
-                    }
-                    let duration = start.elapsed();
-                    log::info!(
-                        "loaded gstreamer codec {:?} in {:?}, found {} packages",
-                        gstreamer_codec,
-                        duration,
-                        packages.len()
-                    );
-
-                    //TODO: store the resolved packages somewhere
-                    let mut results = Vec::with_capacity(packages.len());
-                    for (backend_name, package) in packages {
-                        results.push(SearchResult {
-                            backend_name,
-                            id: package.id,
-                            icon_opt: Some(package.icon),
-                            info: package.info,
-                            weight: 0,
-                        });
-                    }
-                    action::app(Message::SearchResults(input, results, true))
-                })
-                .await
-                .unwrap_or(action::none())
-            },
-            |x| x,
-        )
-    }
-
-    fn handle_mime_url(&self, input: String, path: &str) -> Task<Message> {
-        let apps = self.apps.clone();
-        let backends = self.backends.clone();
-        let os_codename = self.os_codename.clone();
-        let mime = path.trim_matches('/').to_string();
-        let provide = AppProvide::MediaType(mime.clone());
-        Task::perform(
-            async move {
-                tokio::task::spawn_blocking(move || {
-                    let start = Instant::now();
-                    let results =
-                        Self::generic_search(&apps, &backends, &os_codename, |_id, info, _installed| {
-                            //TODO: monthly downloads as weight?
-                            if info.provides.contains(&provide) {
-                                Some(-(info.monthly_downloads as i64))
-                            } else {
-                                None
-                            }
-                        }, SearchSortMode::Relevance, WaylandFilter::All);
-                    let duration = start.elapsed();
-                    log::info!(
-                        "searched for mime {:?} in {:?}, found {} results",
-                        mime,
-                        duration,
-                        results.len()
-                    );
-                    action::app(Message::SearchResults(input, results, false))
                 })
                 .await
                 .unwrap_or(action::none())
@@ -2586,787 +2343,436 @@ impl App {
         widget::settings::view_column(vec![recommended.into(), custom.into()]).into()
     }
 
-    fn view_responsive(&self, size: Size) -> Element<'_, Message> {
-        self.size.set(Some(size));
-        let spacing = theme::active().cosmic().spacing;
+    fn view_search_results<'a>(
+        &'a self,
+        input: &str,
+        results: &'a [SearchResult],
+        spacing: cosmic_theme::Spacing,
+        grid_width: usize,
+    ) -> Element<'a, Message> {
+        //TODO: paging or dynamic load
+        let results_len = cmp::min(results.len(), MAX_RESULTS);
+
+        let mut column = widget::column::with_capacity(2)
+            .padding([0, spacing.space_s, spacing.space_m, spacing.space_s])
+            .spacing(spacing.space_xxs)
+            .width(Length::Fill);
+
+        //TODO: back button?
+        if results.is_empty() {
+            column = column.push(widget::text::body(fl!("no-results", search = input)));
+        }
+
+        column = column.push(SearchResult::grid_view(
+            &results[..results_len],
+            spacing,
+            grid_width,
+            Message::SelectSearchResult,
+        ));
+
+        column.into()
+    }
+
+    fn view_explore_page<'a>(
+        &'a self,
+        spacing: cosmic_theme::Spacing,
+        grid_width: usize,
+    ) -> Element<'a, Message> {
+        let cosmic_theme::Spacing {
+            space_s,
+            space_m,
+            space_xxs,
+            ..
+        } = spacing;
+
+        match self.explore_page_opt {
+            Some(explore_page) => {
+                let mut column = widget::column::with_capacity(3)
+                    .padding([0, space_s, space_m, space_s])
+                    .spacing(space_xxs)
+                    .width(Length::Fill);
+                column = column.push(
+                    widget::button::text(NavPage::Explore.title())
+                        .leading_icon(icon_cache_handle("go-previous-symbolic", 16))
+                        .on_press(Message::ExplorePage(None)),
+                );
+                column = column.push(widget::text::title4(explore_page.title()));
+                //TODO: ensure explore_page matches
+                match self.explore_results.get(&explore_page) {
+                    Some(results) => {
+                        //TODO: paging or dynamic load
+                        let results_len = cmp::min(results.len(), MAX_RESULTS);
+
+                        if results.is_empty() {
+                            //TODO: no results message?
+                        }
+                        column = column.push(SearchResult::grid_view(
+                            &results[..results_len],
+                            spacing,
+                            grid_width,
+                            move |result_i| Message::SelectExploreResult(explore_page, result_i),
+                        ));
+                    }
+                    None => {
+                        //TODO: loading message?
+                    }
+                }
+                column.into()
+            }
+            None => {
+                let explore_pages = ExplorePage::all();
+                let mut column = widget::column::with_capacity(explore_pages.len() * 2)
+                    .padding([0, space_s, space_m, space_s])
+                    .spacing(space_xxs)
+                    .width(Length::Fill);
+                for explore_page in explore_pages.iter() {
+                    //TODO: ensure explore_page matches
+                    match self.explore_results.get(explore_page) {
+                        Some(results) if !results.is_empty() => {
+                            let GridMetrics { cols, .. } =
+                                SearchResult::grid_metrics(&spacing, grid_width);
+
+                            let max_results = match cols {
+                                1 => 4,
+                                2 => 8,
+                                3 => 9,
+                                _ => cols * 2,
+                            };
+
+                            //TODO: adjust results length based on app size?
+                            let results_len = cmp::min(results.len(), max_results);
+
+                            column = column.push(widget::row::with_children(vec![
+                                widget::text::title4(explore_page.title()).into(),
+                                widget::horizontal_space().into(),
+                                widget::button::text(fl!("see-all"))
+                                    .trailing_icon(icon_cache_handle("go-next-symbolic", 16))
+                                    .on_press(Message::ExplorePage(Some(*explore_page)))
+                                    .into(),
+                            ]));
+
+                            column = column.push(SearchResult::grid_view(
+                                &results[..results_len],
+                                spacing,
+                                grid_width,
+                                |result_i| Message::SelectExploreResult(*explore_page, result_i),
+                            ));
+                        }
+                        _ => {}
+                    }
+                }
+                column.into()
+            }
+        }
+    }
+
+    fn view_installed_page<'a>(
+        &'a self,
+        spacing: cosmic_theme::Spacing,
+        grid_width: usize,
+    ) -> Element<'a, Message> {
+        let mut column = widget::column::with_capacity(3)
+            .padding([0, spacing.space_s, spacing.space_m, spacing.space_s])
+            .spacing(spacing.space_xxs)
+            .width(Length::Fill);
+        column = column.push(widget::text::title2(NavPage::Installed.title()));
+        match &self.installed_results {
+            Some(installed) => {
+                if installed.is_empty() {
+                    column = column.push(widget::text(fl!("no-installed-applications")));
+                }
+
+                let GridMetrics {
+                    cols,
+                    item_width,
+                    column_spacing,
+                } = SearchResult::grid_metrics(&spacing, grid_width);
+                let mut grid = widget::grid();
+                let mut col = 0;
+                for (installed_i, result) in installed.iter().enumerate() {
+                    if col >= cols {
+                        grid = grid.insert_row();
+                        col = 0;
+                    }
+                    let mut buttons = Vec::with_capacity(1);
+                    if let Some(desktop_id) = result.info.desktop_ids.first() {
+                        buttons.push(
+                            widget::button::standard(fl!("open"))
+                                .on_press(Message::OpenDesktopId(desktop_id.clone()))
+                                .into(),
+                        );
+                    } else {
+                        buttons.push(widget::Space::with_height(Length::Shrink).into());
+                    }
+                    grid = grid.push(
+                        widget::mouse_area(package_card_view(
+                            &result.info,
+                            result.icon_opt.as_ref(),
+                            buttons,
+                            None,
+                            &spacing,
+                            item_width,
+                        ))
+                        .on_press(Message::SelectInstalled(installed_i)),
+                    );
+                    col += 1;
+                }
+                column = column.push(
+                    grid.column_spacing(column_spacing)
+                        .row_spacing(column_spacing),
+                );
+            }
+            None => {
+                //TODO: loading message?
+            }
+        }
+        column.into()
+    }
+
+    fn view_updates_page<'a>(
+        &'a self,
+        spacing: cosmic_theme::Spacing,
+        grid_width: usize,
+    ) -> Element<'a, Message> {
         let cosmic_theme::Spacing {
             space_l,
             space_m,
             space_s,
-            space_xs,
             space_xxs,
-            space_xxxs,
             ..
         } = spacing;
-        let grid_width = (size.width - 2.0 * space_s as f32).floor().max(0.0) as usize;
-        match &self.selected_opt {
-            Some(selected) => {
-                let mut selected_source = None;
-                for (i, source) in selected.sources.iter().enumerate() {
-                    if source.backend_name == selected.backend_name
-                        && source.source_id == selected.info.source_id
-                    {
-                        selected_source = Some(i);
-                        break;
-                    }
-                }
-
-                let mut column = widget::column::with_capacity(2)
-                    .padding([0, space_s, space_m, space_s])
-                    .spacing(space_m)
-                    .width(Length::Fill);
-                column = column.push(
-                    //TODO: describe where we are going back to
-                    widget::button::text(fl!("back"))
-                        .leading_icon(icon_cache_handle("go-previous-symbolic", 16))
-                        .on_press(Message::SelectNone),
-                );
-
-                let buttons = self.selected_buttons(
-                    selected.backend_name,
-                    &selected.id,
-                    &selected.info,
-                    false,
-                );
-
-                let mut title_row_children = vec![
-                    widget::text::title2(&selected.info.name).into(),
-                ];
-                // Only show Wayland compatibility badge for Flathub apps
-                if selected.info.source_id == "flathub" {
-                    if let Some(badge) = wayland_compat_badge(&selected.info, 24) {
-                        title_row_children.push(widget::Space::with_width(Length::Fixed(space_xs.into())).into());
-                        title_row_children.push(badge);
-                    }
-                }
-
-                column = column.push(
-                    widget::row::with_children(vec![
-                        match &selected.icon_opt {
-                            Some(icon) => styled_icon(icon.clone(), ICON_SIZE_DETAILS),
-                            None => {
-                                widget::Space::with_width(Length::Fixed(ICON_SIZE_DETAILS as f32))
-                                    .into()
-                            }
-                        },
-                        widget::column::with_children(vec![
-                            widget::row::with_children(title_row_children)
-                                .align_y(Alignment::Center)
-                                .into(),
-                            widget::text(&selected.info.summary).into(),
-                            widget::Space::with_height(Length::Fixed(space_s.into())).into(),
-                            widget::row::with_children(buttons).spacing(space_xs).into(),
-                        ])
-                        .into(),
-                    ])
-                    .align_y(Alignment::Center)
-                    .spacing(space_m),
-                );
-
-                let sources_widget = widget::column::with_children(vec![if selected.sources.len()
-                    == 1
-                {
-                    widget::text(selected.sources[0].as_ref()).into()
+        let mut column = widget::column::with_capacity(3)
+            .padding([0, space_s, space_m, space_s])
+            .spacing(space_xxs)
+            .width(Length::Fill);
+        match &self.updates {
+            Some(updates) => {
+                if updates.is_empty() {
+                    column = column
+                        .push(widget::text::title2(NavPage::Updates.title()))
+                        .push(
+                            widget::column::with_capacity(2)
+                                .spacing(space_s)
+                                .padding([space_l, 0])
+                                .width(Length::Fill)
+                                .align_x(Alignment::Center)
+                                .push(widget::text::body(fl!("no-updates")))
+                                .push(
+                                    widget::button::standard(fl!("check-for-updates"))
+                                        .on_press(Message::CheckUpdates),
+                                ),
+                        );
                 } else {
-                    widget::dropdown(&selected.sources, selected_source, Message::SelectedSource)
-                        .into()
-                }])
-                .align_x(Alignment::Center)
-                .width(Length::Fill);
-                let developers_widget = widget::column::with_children(vec![
-                    if selected.info.developer_name.is_empty() {
-                        widget::text::heading(fl!(
-                            "app-developers",
-                            app = selected.info.name.as_str()
-                        ))
-                        .into()
-                    } else {
-                        widget::text::heading(&selected.info.developer_name).into()
-                    },
-                    widget::text::body(fl!("developer")).into(),
-                ])
-                .align_x(Alignment::Center)
-                .width(Length::Fill);
-                let downloads_widget = (selected.info.source_id == "flathub" && selected.info.monthly_downloads > 0).then(|| {
+                    column = column.push(widget::flex_row(vec![
+                        widget::text::title2(NavPage::Updates.title()).into(),
+                        widget::horizontal_space().width(Length::Fill).into(),
+                        widget::row::with_capacity(2)
+                            .spacing(space_xxs)
+                            .push(
+                                widget::button::standard(fl!("check-for-updates"))
+                                    .on_press(Message::CheckUpdates),
+                            )
+                            .push(
+                                widget::button::standard(fl!("update-all"))
+                                    .on_press(Message::UpdateAll),
+                            )
+                            .into(),
+                    ]));
+
+                    let GridMetrics {
+                        cols,
+                        item_width,
+                        column_spacing,
+                    } = Package::grid_metrics(&spacing, grid_width);
+                    let mut grid = widget::grid();
+                    let mut col = 0;
+                    for (updates_i, (backend_name, package)) in updates.iter().enumerate() {
+                        let mut controls = Vec::with_capacity(1);
+                        let mut top_controls = Vec::with_capacity(1);
+                        let mut waiting_refresh = false;
+                        for (other_backend_name, source_id, package_id) in self
+                            .waiting_installed
+                            .iter()
+                            .chain(self.waiting_updates.iter())
+                        {
+                            if other_backend_name == backend_name
+                                && source_id == &package.info.source_id
+                                && package_id == &package.id
+                            {
+                                waiting_refresh = true;
+                                break;
+                            }
+                        }
+                        let mut progress_opt = None;
+                        for (_id, (op, progress)) in self.pending_operations.iter() {
+                            if &op.backend_name == backend_name
+                                && op
+                                    .infos
+                                    .iter()
+                                    .any(|info| info.source_id == package.info.source_id)
+                                && op
+                                    .package_ids
+                                    .iter()
+                                    .any(|package_id| package_id == &package.id)
+                            {
+                                progress_opt = Some(*progress);
+                                break;
+                            }
+                        }
+                        if let Some(progress) = progress_opt {
+                            controls.push(
+                                widget::progress_bar(0.0..=100.0, progress)
+                                    .height(Length::Fixed(4.0))
+                                    .into(),
+                            );
+                        } else if !waiting_refresh {
+                            controls.push(
+                                widget::button::standard(fl!("update"))
+                                    .on_press(Message::Operation(
+                                        OperationKind::Update,
+                                        backend_name,
+                                        package.id.clone(),
+                                        package.info.clone(),
+                                    ))
+                                    .into(),
+                            );
+                        }
+                        top_controls.push(
+                            widget::button::icon(widget::icon::from_name("help-info-symbolic"))
+                                .on_press(Message::ToggleContextPage(ContextPage::ReleaseNotes(
+                                    updates_i,
+                                    package.info.name.clone(),
+                                )))
+                                .into(),
+                        );
+                        if col >= cols {
+                            grid = grid.insert_row();
+                            col = 0;
+                        }
+                        grid = grid.push(
+                            widget::mouse_area(package.card_view(
+                                controls,
+                                Some(top_controls),
+                                &spacing,
+                                item_width,
+                            ))
+                            .on_press(Message::SelectUpdates(updates_i)),
+                        );
+                        col += 1;
+                    }
+                    column = column.push(
+                        grid.column_spacing(column_spacing)
+                            .row_spacing(column_spacing),
+                    );
+                }
+            }
+            None => {
+                column = column
+                    .push(widget::text::title2(NavPage::Updates.title()))
+                    .push(
+                        widget::column::with_capacity(2)
+                            .spacing(space_s)
+                            .padding([space_l, 0])
+                            .width(Length::Fill)
+                            .align_x(Alignment::Center)
+                            /*.push(
+                                widget::progress_bar(0.0..=100.0, progress)
+                                    .height(Length::Fixed(4.0))
+                                    .width(Length::Fixed(446.0)),
+                            )*/
+                            .push(widget::text(fl!("checking-for-updates"))),
+                    );
+            }
+        }
+        column.into()
+    }
+
+    fn view_category_page<'a>(
+        &'a self,
+        nav_page: NavPage,
+        spacing: cosmic_theme::Spacing,
+        grid_width: usize,
+    ) -> Element<'a, Message> {
+        let cosmic_theme::Spacing {
+            space_l,
+            space_m,
+            space_s,
+            space_xxs,
+            ..
+        } = spacing;
+        let mut column = widget::column::with_capacity(3)
+            .padding([0, space_s, space_m, space_s])
+            .spacing(space_xxs)
+            .width(Length::Fill);
+        column = column.push(widget::text::title2(nav_page.title()));
+        if matches!(nav_page, NavPage::Applets) {
+            let sources = self.sources();
+            if !sources.is_empty()
+                && sources.iter().any(|source| {
+                    matches!(source.kind, SourceKind::Recommended { enabled: false, .. })
+                })
+            {
+                column = column.push(
                     widget::column::with_children(vec![
-                        widget::text::heading(selected.info.monthly_downloads.to_string()).into(),
-                        //TODO: description of what this means?
-                        widget::text::body(fl!("monthly-downloads")).into(),
+                        widget::Space::with_height(space_m).into(),
+                        widget::text(fl!("enable-flathub-cosmic")).into(),
+                        widget::Space::with_height(space_m).into(),
+                        widget::button::standard(fl!("manage-repositories"))
+                            .on_press(Message::ToggleContextPage(ContextPage::Repositories))
+                            .into(),
+                        widget::Space::with_height(space_l).into(),
                     ])
                     .align_x(Alignment::Center)
-                    .width(Length::Fill)
-                });
-                if grid_width < 416 {
-                    let size = 4 + if downloads_widget.is_some() { 3 } else { 0 };
-                    let downloads_widget_space = downloads_widget
-                        .is_some()
-                        .then(widget::divider::horizontal::default);
-                    column = column.push(
-                        widget::column::with_capacity(size)
-                            .push(widget::divider::horizontal::default())
-                            .push(sources_widget)
-                            .push(widget::divider::horizontal::default())
-                            .push(developers_widget)
-                            .push(widget::divider::horizontal::default())
-                            .push_maybe(downloads_widget)
-                            .push_maybe(downloads_widget_space)
-                            .spacing(space_xxs),
-                    );
-                } else {
-                    let row_size = 4 + if downloads_widget.is_some() { 2 } else { 0 };
-                    let downloads_widget_space = downloads_widget
-                        .is_some()
-                        .then(|| widget::divider::vertical::default().height(Length::Fixed(32.0)));
-                    column = column.push(
-                        widget::column::with_children(vec![
-                            widget::divider::horizontal::default().into(),
-                            widget::row::with_capacity(row_size)
-                                .push(sources_widget)
-                                .push(
-                                    widget::divider::vertical::default()
-                                        .height(Length::Fixed(32.0)),
-                                )
-                                .push(developers_widget)
-                                .push_maybe(downloads_widget_space)
-                                .push_maybe(downloads_widget)
-                                .align_y(Alignment::Center)
-                                .into(),
-                            widget::divider::horizontal::default().into(),
-                        ])
-                        .spacing(space_xxs),
-                    );
-                }
-                //TODO: proper image scroller
-                if let Some(screenshot) = selected.info.screenshots.get(selected.screenshot_shown) {
-                    let image_height = Length::Fixed(320.0);
-                    let mut row = widget::row::with_capacity(3).align_y(Alignment::Center);
-                    {
-                        let mut button = widget::button::icon(
-                            widget::icon::from_name("go-previous-symbolic").size(16),
-                        );
-                        let index = selected.screenshot_shown.checked_sub(1).unwrap_or_else(|| {
-                            selected
-                                .info
-                                .screenshots
-                                .len()
-                                .checked_sub(1)
-                                .unwrap_or_default()
-                        });
-                        if index != selected.screenshot_shown {
-                            button = button.on_press(Message::SelectedScreenshotShown(index));
-                        }
-                        row = row.push(button);
-                    }
-                    let image_element = if let Some(image) =
-                        selected.screenshot_images.get(&selected.screenshot_shown)
-                    {
-                        widget::container(widget::image(image.clone()))
-                            .center_x(Length::Fill)
-                            .center_y(image_height)
-                            .into()
-                    } else {
-                        widget::Space::new(Length::Fill, image_height).into()
-                    };
-                    row = row.push(
-                        widget::column::with_children(vec![
-                            image_element,
-                            widget::text::caption(&screenshot.caption).into(),
-                        ])
-                        .align_x(Alignment::Center),
-                    );
-                    {
-                        let mut button = widget::button::icon(
-                            widget::icon::from_name("go-next-symbolic").size(16),
-                        );
-                        let index =
-                            if selected.screenshot_shown + 1 == selected.info.screenshots.len() {
-                                0
-                            } else {
-                                selected.screenshot_shown + 1
-                            };
-                        if index != selected.screenshot_shown {
-                            button = button.on_press(Message::SelectedScreenshotShown(index));
-                        }
-                        row = row.push(button);
-                    }
-                    column = column.push(row);
-                }
-                column = column.push(widget::text::body(&selected.info.description));
-
-                // Add compatibility warning banner if needed (only for Flathub apps)
-                if selected.info.source_id == "flathub" {
-                    if let Some(compat) = selected.info.wayland_compat_lazy() {
-                        if compat.risk_level == RiskLevel::Critical || compat.risk_level == RiskLevel::High {
-                            let (title, description, icon_name) = if matches!(compat.support, WaylandSupport::X11Only) {
-                                (
-                                    fl!("compatibility-warning"),
-                                    fl!("x11-only-description"),
-                                    "dialog-warning-symbolic"
-                                )
-                            } else {
-                                let framework_name = match compat.framework {
-                                    AppFramework::QtWebEngine => fl!("framework-qtwebengine"),
-                                    AppFramework::Electron => fl!("framework-electron"),
-                                    _ => fl!("wayland-issues-warning"),
-                                };
-                                (
-                                    fl!("wayland-issues-warning"),
-                                    fl!("wayland-issues-description", framework = framework_name),
-                                    "dialog-warning-symbolic"
-                                )
-                            };
-
-                            let warning_container = widget::container(
-                                widget::column::with_children(vec![
-                                    widget::row::with_children(vec![
-                                        widget::icon::from_name(icon_name)
-                                            .size(24)
-                                            .into(),
-                                        widget::text::heading(title)
-                                            .width(Length::Fill)
-                                            .into(),
-                                    ])
-                                    .spacing(space_s)
-                                    .into(),
-                                    widget::text::body(description).into(),
-                                ])
-                                .spacing(space_xxs)
-                            )
-                            .padding(space_s)
-                            .class(theme::Container::Card);
-
-                            column = column.push(warning_container);
-                            column = column.push(widget::Space::with_height(Length::Fixed(space_s.into())));
-                        }
-                    }
-                }
-
-                if !selected.addons.is_empty() {
-                    let mut addon_col = widget::column::with_capacity(2).spacing(space_xxxs);
-                    addon_col = addon_col.push(widget::text::title4(fl!("addons")));
-                    let mut list = widget::list_column()
-                        .divider_padding(0)
-                        .list_item_padding([space_xxs, 0])
-                        .style(theme::Container::Transparent);
-                    let addon_cnt = selected.addons.len();
-                    let take = if selected.addons_view_more {
-                        addon_cnt
-                    } else {
-                        4
-                    };
-                    for (addon_id, addon_info) in selected.addons.iter().take(take) {
-                        let buttons = self.selected_buttons(
-                            selected.backend_name,
-                            addon_id,
-                            addon_info,
-                            true,
-                        );
-                        list = list.add(
-                            widget::settings::item::builder(&addon_info.name)
-                                .description(&addon_info.summary)
-                                .control(widget::row::with_children(buttons).spacing(space_xs)),
-                        );
-                    }
-                    if addon_cnt > 4 && !selected.addons_view_more {
-                        list = list.add(
-                            widget::button::text(fl!("view-more"))
-                                .on_press(Message::SelectedAddonsViewMore(true)),
-                        );
-                    }
-                    addon_col = addon_col.push(list);
-                    column = column.push(addon_col);
-                }
-
-                for release in selected.info.releases.iter() {
-                    let mut release_col = widget::column::with_capacity(2).spacing(space_xxxs);
-                    release_col = release_col.push(widget::text::title4(fl!(
-                        "version",
-                        version = release.version.as_str()
-                    )));
-                    if let Some(timestamp) = release.timestamp {
-                        if let Some(utc) =
-                            chrono::DateTime::<chrono::Utc>::from_timestamp(timestamp, 0)
-                        {
-                            let local = chrono::DateTime::<chrono::Local>::from(utc);
-                            release_col = release_col.push(widget::text::body(format!(
-                                "{}",
-                                local.format("%b %-d, %-Y")
-                            )));
-                        }
-                    }
-                    if let Some(description) = &release.description {
-                        release_col = release_col.push(widget::text::body(description));
-                    }
-                    column = column.push(release_col);
-                    //TODO: show more releases, or make sure this is the latest?
-                    break;
-                }
-
-                if let Some(license) = &selected.info.license_opt {
-                    let mut license_col = widget::column::with_capacity(2).spacing(space_xxxs);
-                    license_col = license_col.push(widget::text::title4(fl!("licenses")));
-                    match spdx::Expression::parse_mode(license, spdx::ParseMode::LAX) {
-                        Ok(expr) => {
-                            for item in expr.requirements() {
-                                match &item.req.license {
-                                    spdx::LicenseItem::Spdx { id, .. } => {
-                                        license_col =
-                                            license_col.push(widget::text::body(id.full_name));
-                                    }
-                                    spdx::LicenseItem::Other { lic_ref, .. } => {
-                                        let mut parts = lic_ref.splitn(2, '=');
-                                        parts.next();
-                                        if let Some(url) = parts.next() {
-                                            license_col = license_col.push(
-                                                widget::button::link(fl!("proprietary"))
-                                                    .on_press(Message::LaunchUrl(url.to_string()))
-                                                    .padding(0),
-                                            )
-                                        } else {
-                                            license_col = license_col
-                                                .push(widget::text::body(fl!("proprietary")));
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        Err(_) => {
-                            license_col = license_col.push(widget::text::body(license));
-                        }
-                    }
-                    column = column.push(license_col);
-                }
-
-                if !selected.info.urls.is_empty() {
-                    let mut url_items = Vec::with_capacity(selected.info.urls.len());
-                    for app_url in &selected.info.urls {
-                        let (name, url) = match app_url {
-                            AppUrl::BugTracker(url) => (fl!("bug-tracker"), url),
-                            AppUrl::Contact(url) => (fl!("contact"), url),
-                            AppUrl::Donation(url) => (fl!("donation"), url),
-                            AppUrl::Faq(url) => (fl!("faq"), url),
-                            AppUrl::Help(url) => (fl!("help"), url),
-                            AppUrl::Homepage(url) => (fl!("homepage"), url),
-                            AppUrl::Translate(url) => (fl!("translate"), url),
-                        };
-                        url_items.push(
-                            widget::button::link(name)
-                                .on_press(Message::LaunchUrl(url.to_string()))
-                                .padding(0)
-                                .into(),
-                        );
-                    }
-                    if grid_width < 416 {
-                        column = column
-                            .push(widget::column::with_children(url_items).spacing(space_xxxs));
-                    } else {
-                        column = column.push(
-                            widget::row::with_children(url_items)
-                                .spacing(space_s)
-                                .align_y(Alignment::Center),
-                        );
-                    }
-                }
-
-                column.into()
+                    .width(Length::Fill),
+                );
             }
+        }
+        //TODO: ensure category matches?
+        match &self.category_results {
+            Some((_, results)) => {
+                //TODO: paging or dynamic load
+                let results_len = cmp::min(results.len(), MAX_RESULTS);
+
+                if results.is_empty() {
+                    //TODO: no results message?
+                }
+
+                column = column.push(SearchResult::grid_view(
+                    &results[..results_len],
+                    spacing,
+                    grid_width,
+                    Message::SelectCategoryResult,
+                ));
+            }
+            None => {
+                //TODO: loading message?
+            }
+        }
+        column.into()
+    }
+
+    fn view_responsive(&self, size: Size) -> Element<'_, Message> {
+        self.size.set(Some(size));
+        let spacing = theme::active().cosmic().spacing;
+        let cosmic_theme::Spacing { space_s, .. } = spacing;
+        let grid_width = (size.width - 2.0 * space_s as f32).floor().max(0.0) as usize;
+
+        match &self.details_page_opt {
+            Some(details_page) => details_page.view(self, spacing, grid_width),
             None => match &self.search_results {
                 Some((input, results)) => {
-                    //TODO: paging or dynamic load
-                    let results_len = cmp::min(results.len(), MAX_RESULTS);
-
-                    let mut column = widget::column::with_capacity(2)
-                        .padding([0, space_s, space_m, space_s])
-                        .spacing(space_xxs)
-                        .width(Length::Fill);
-                    //TODO: back button?
-                    if results.is_empty() {
-                        column = column.push(widget::text::body(fl!(
-                            "no-results",
-                            search = input.as_str()
-                        )));
-                    }
-                    column = column.push(SearchResult::grid_view(
-                        &results[..results_len],
-                        spacing,
-                        grid_width,
-                        Message::SelectSearchResult,
-                    ));
-                    column.into()
+                    self.view_search_results(input, results, spacing, grid_width)
                 }
                 None => match self
                     .nav_model
                     .active_data::<NavPage>()
                     .map_or(NavPage::default(), |nav_page| *nav_page)
                 {
-                    NavPage::Explore => {
-                        match self.explore_page_opt {
-                            Some(explore_page) => {
-                                let mut column = widget::column::with_capacity(3)
-                                    .padding([0, space_s, space_m, space_s])
-                                    .spacing(space_xxs)
-                                    .width(Length::Fill);
-                                column = column.push(
-                                    widget::button::text(NavPage::Explore.title())
-                                        .leading_icon(icon_cache_handle("go-previous-symbolic", 16))
-                                        .on_press(Message::ExplorePage(None)),
-                                );
-                                column = column.push(widget::text::title4(explore_page.title()));
-                                //TODO: ensure explore_page matches
-                                match self.explore_results.get(&explore_page) {
-                                    Some(results) => {
-                                        //TODO: paging or dynamic load
-                                        let results_len = cmp::min(results.len(), MAX_RESULTS);
-
-                                        if results.is_empty() {
-                                            //TODO: no results message?
-                                        }
-                                        column = column.push(SearchResult::grid_view(
-                                            &results[..results_len],
-                                            spacing,
-                                            grid_width,
-                                            move |result_i| {
-                                                Message::SelectExploreResult(explore_page, result_i)
-                                            },
-                                        ));
-                                    }
-                                    None => {
-                                        //TODO: loading message?
-                                    }
-                                }
-                                column.into()
-                            }
-                            None => {
-                                let explore_pages = ExplorePage::all();
-                                let mut column =
-                                    widget::column::with_capacity(explore_pages.len() * 2)
-                                        .padding([0, space_s, space_m, space_s])
-                                        .spacing(space_xxs)
-                                        .width(Length::Fill);
-                                for explore_page in explore_pages.iter() {
-                                    //TODO: ensure explore_page matches
-                                    match self.explore_results.get(explore_page) {
-                                        Some(results) if !results.is_empty() => {
-                                            let GridMetrics { cols, .. } =
-                                                SearchResult::grid_metrics(&spacing, grid_width);
-
-                                            let max_results = match cols {
-                                                1 => 4,
-                                                2 => 8,
-                                                3 => 9,
-                                                _ => cols * 2,
-                                            };
-
-                                            //TODO: adjust results length based on app size?
-                                            let results_len = cmp::min(results.len(), max_results);
-
-                                            column = column.push(widget::row::with_children(vec![
-                                                widget::text::title4(explore_page.title()).into(),
-                                                widget::horizontal_space().into(),
-                                                widget::button::text(fl!("see-all"))
-                                                    .trailing_icon(icon_cache_handle(
-                                                        "go-next-symbolic",
-                                                        16,
-                                                    ))
-                                                    .on_press(Message::ExplorePage(Some(
-                                                        *explore_page,
-                                                    )))
-                                                    .into(),
-                                            ]));
-
-                                            column = column.push(SearchResult::grid_view(
-                                                &results[..results_len],
-                                                spacing,
-                                                grid_width,
-                                                |result_i| {
-                                                    Message::SelectExploreResult(
-                                                        *explore_page,
-                                                        result_i,
-                                                    )
-                                                },
-                                            ));
-                                        }
-                                        _ => {}
-                                    }
-                                }
-                                column.into()
-                            }
-                        }
-                    }
-                    NavPage::Installed => {
-                        let mut column = widget::column::with_capacity(3)
-                            .padding([0, space_s, space_m, space_s])
-                            .spacing(space_xxs)
-                            .width(Length::Fill);
-                        column = column.push(widget::text::title2(NavPage::Installed.title()));
-                        match &self.installed_results {
-                            Some(installed) => {
-                                if installed.is_empty() {
-                                    column =
-                                        column.push(widget::text(fl!("no-installed-applications")));
-                                }
-
-                                let GridMetrics {
-                                    cols,
-                                    item_width,
-                                    column_spacing,
-                                } = Package::grid_metrics(&spacing, grid_width);
-                                let mut grid = widget::grid();
-                                let mut col = 0;
-                                for (installed_i, result) in installed.iter().enumerate() {
-                                    if col >= cols {
-                                        grid = grid.insert_row();
-                                        col = 0;
-                                    }
-                                    let mut buttons = Vec::with_capacity(1);
-                                    if let Some(desktop_id) = result.info.desktop_ids.first() {
-                                        buttons.push(
-                                            widget::button::standard(fl!("open"))
-                                                .on_press(Message::OpenDesktopId(
-                                                    desktop_id.clone(),
-                                                ))
-                                                .into(),
-                                        );
-                                    } else {
-                                        buttons.push(
-                                            widget::Space::with_height(Length::Shrink).into(),
-                                        );
-                                    }
-                                    grid = grid.push(
-                                        widget::mouse_area(package_card_view(
-                                            &result.info,
-                                            result.icon_opt.as_ref(),
-                                            buttons,
-                                            None,
-                                            &spacing,
-                                            item_width,
-                                        ))
-                                        .on_press(Message::SelectInstalled(installed_i)),
-                                    );
-                                    col += 1;
-                                }
-                                column = column.push(
-                                    grid.column_spacing(column_spacing)
-                                        .row_spacing(column_spacing),
-                                );
-                            }
-                            None => {
-                                //TODO: loading message?
-                            }
-                        }
-                        column.into()
-                    }
+                    NavPage::Explore => self.view_explore_page(spacing, grid_width),
+                    NavPage::Installed => self.view_installed_page(spacing, grid_width),
                     //TODO: reduce duplication
-                    NavPage::Updates => {
-                        let mut column = widget::column::with_capacity(3)
-                            .padding([0, space_s, space_m, space_s])
-                            .spacing(space_xxs)
-                            .width(Length::Fill);
-                        match &self.updates {
-                            Some(updates) => {
-                                if updates.is_empty() {
-                                    column = column
-                                        .push(widget::text::title2(NavPage::Updates.title()))
-                                        .push(
-                                            widget::column::with_capacity(2)
-                                                .spacing(space_s)
-                                                .padding([space_l, 0])
-                                                .width(Length::Fill)
-                                                .align_x(Alignment::Center)
-                                                .push(widget::text::body(fl!("no-updates")))
-                                                .push(
-                                                    widget::button::standard(fl!(
-                                                        "check-for-updates"
-                                                    ))
-                                                    .on_press(Message::CheckUpdates),
-                                                ),
-                                        );
-                                } else {
-                                    column = column.push(widget::flex_row(vec![
-                                        widget::text::title2(NavPage::Updates.title()).into(),
-                                        widget::horizontal_space().width(Length::Fill).into(),
-                                        widget::row::with_capacity(2)
-                                            .spacing(space_xxs)
-                                            .push(
-                                                widget::button::standard(fl!("check-for-updates"))
-                                                    .on_press(Message::CheckUpdates),
-                                            )
-                                            .push(
-                                                widget::button::standard(fl!("update-all"))
-                                                    .on_press(Message::UpdateAll),
-                                            )
-                                            .into(),
-                                    ]));
-                                }
-
-                                let GridMetrics {
-                                    cols,
-                                    item_width,
-                                    column_spacing,
-                                } = Package::grid_metrics(&spacing, grid_width);
-                                let mut grid = widget::grid();
-                                let mut col = 0;
-                                for (updates_i, (backend_name, package)) in
-                                    updates.iter().enumerate()
-                                {
-                                    let mut waiting_refresh = false;
-                                    for (other_backend_name, source_id, package_id) in self
-                                        .waiting_installed
-                                        .iter()
-                                        .chain(self.waiting_updates.iter())
-                                    {
-                                        if other_backend_name == backend_name
-                                            && source_id == &package.info.source_id
-                                            && package_id == &package.id
-                                        {
-                                            waiting_refresh = true;
-                                            break;
-                                        }
-                                    }
-                                    let mut progress_opt = None;
-                                    for (_id, (op, progress)) in self.pending_operations.iter() {
-                                        if &op.backend_name == backend_name
-                                            && op.infos.iter().any(|info| {
-                                                info.source_id == package.info.source_id
-                                            })
-                                            && op
-                                                .package_ids
-                                                .iter()
-                                                .any(|package_id| package_id == &package.id)
-                                        {
-                                            progress_opt = Some(*progress);
-                                            break;
-                                        }
-                                    }
-                                    let controls = if let Some(progress) = progress_opt {
-                                        vec![
-                                            widget::progress_bar(0.0..=100.0, progress)
-                                                .height(Length::Fixed(4.0))
-                                                .into(),
-                                        ]
-                                    } else if waiting_refresh {
-                                        vec![]
-                                    } else {
-                                        vec![
-                                            widget::button::standard(fl!("update"))
-                                                .on_press(Message::Operation(
-                                                    OperationKind::Update,
-                                                    backend_name,
-                                                    package.id.clone(),
-                                                    package.info.clone(),
-                                                ))
-                                                .into(),
-                                        ]
-                                    };
-                                    let top_controls = Some(vec![
-                                        widget::button::icon(widget::icon::from_name(
-                                            "help-info-symbolic",
-                                        ))
-                                        .on_press(Message::ToggleContextPage(
-                                            ContextPage::ReleaseNotes(
-                                                updates_i,
-                                                package.info.name.clone(),
-                                            ),
-                                        ))
-                                        .into(),
-                                    ]);
-                                    if col >= cols {
-                                        grid = grid.insert_row();
-                                        col = 0;
-                                    }
-                                    grid = grid.push(
-                                        widget::mouse_area(package.card_view(
-                                            controls,
-                                            top_controls,
-                                            &spacing,
-                                            item_width,
-                                        ))
-                                        .on_press(Message::SelectUpdates(updates_i)),
-                                    );
-                                    col += 1;
-                                }
-                                column = column.push(
-                                    grid.column_spacing(column_spacing)
-                                        .row_spacing(column_spacing),
-                                );
-                            }
-                            None => {
-                                column = column
-                                    .push(widget::text::title2(NavPage::Updates.title()))
-                                    .push(
-                                        widget::column::with_capacity(2)
-                                            .spacing(space_s)
-                                            .padding([space_l, 0])
-                                            .width(Length::Fill)
-                                            .align_x(Alignment::Center)
-                                            /*.push(
-                                                widget::progress_bar(0.0..=100.0, progress)
-                                                    .height(Length::Fixed(4.0))
-                                                    .width(Length::Fixed(446.0)),
-                                            )*/
-                                            .push(widget::text(fl!("checking-for-updates"))),
-                                    );
-                            }
-                        }
-                        column.into()
-                    }
-                    //TODO: reduce duplication
-                    nav_page => {
-                        let mut column = widget::column::with_capacity(3)
-                            .padding([0, space_s, space_m, space_s])
-                            .spacing(space_xxs)
-                            .width(Length::Fill);
-                        column = column.push(widget::text::title2(nav_page.title()));
-                        if matches!(nav_page, NavPage::Applets) {
-                            let sources = self.sources();
-                            if !sources.is_empty()
-                                && sources.iter().any(|source| {
-                                    matches!(
-                                        source.kind,
-                                        SourceKind::Recommended { enabled: false, .. }
-                                    )
-                                })
-                            {
-                                column = column.push(
-                                    widget::column::with_children(vec![
-                                        widget::Space::with_height(space_m).into(),
-                                        widget::text(fl!("enable-flathub-cosmic")).into(),
-                                        widget::Space::with_height(space_m).into(),
-                                        widget::button::standard(fl!("manage-repositories"))
-                                            .on_press(Message::ToggleContextPage(
-                                                ContextPage::Repositories,
-                                            ))
-                                            .into(),
-                                        widget::Space::with_height(space_l).into(),
-                                    ])
-                                    .align_x(Alignment::Center)
-                                    .width(Length::Fill),
-                                );
-                            }
-                        }
-                        //TODO: ensure category matches?
-                        match &self.category_results {
-                            Some((_, results)) => {
-                                //TODO: paging or dynamic load
-                                let results_len = cmp::min(results.len(), MAX_RESULTS);
-
-                                if results.is_empty() {
-                                    //TODO: no results message?
-                                }
-
-                                column = column.push(SearchResult::grid_view(
-                                    &results[..results_len],
-                                    spacing,
-                                    grid_width,
-                                    Message::SelectCategoryResult,
-                                ));
-                            }
-                            None => {
-                                //TODO: loading message?
-                            }
-                        }
-                        column.into()
-                    }
+                    NavPage::Updates => self.view_updates_page(spacing, grid_width),
+                    nav_page => self.view_category_page(nav_page, spacing, grid_width),
                 },
             },
         }
@@ -3488,7 +2894,7 @@ impl Application for App {
             explore_results: HashMap::new(),
             installed_results: None,
             search_results: None,
-            selected_opt: None,
+            details_page_opt: None,
             applet_placement_buttons,
             uninstall_purge_data: false,
         };
@@ -3563,7 +2969,7 @@ impl Application for App {
         self.explore_page_opt = None;
         self.search_active = false;
         self.search_results = None;
-        self.selected_opt = None;
+        self.details_page_opt = None;
         self.nav_model.activate(id);
         let mut commands = Vec::with_capacity(2);
         self.scroll_views.clear();
@@ -3584,102 +2990,61 @@ impl Application for App {
 
     /// Handle application events here.
     fn update(&mut self, message: Self::Message) -> Task<Message> {
-        // Helper for updating config values efficiently
-        macro_rules! config_set {
-            ($name: ident, $value: expr) => {
-                match &self.config_handler {
-                    Some(config_handler) => {
-                        match paste::paste! { self.config.[<set_ $name>](config_handler, $value) } {
-                            Ok(_) => {}
-                            Err(err) => {
-                                log::warn!(
-                                    "failed to save config {:?}: {}",
-                                    stringify!($name),
-                                    err
-                                );
-                            }
-                        }
-                    }
-                    None => {
-                        self.config.$name = $value;
-                        log::warn!(
-                            "failed to save config {:?}: no config handler",
-                            stringify!($name)
-                        );
-                    }
-                }
-            };
-        }
-
         match message {
-            Message::AppTheme(app_theme) => {
-                config_set!(app_theme, app_theme);
-                return self.update_config();
+            Message::AppTheme(_) | Message::Config(_) | Message::SystemThemeModeChange(_) => {
+                return self.handle_config_message(message);
             }
-            Message::Backends(backends) => {
-                self.backends = backends;
-                self.repos_changing.clear();
-                let mut tasks = Vec::with_capacity(2);
-                tasks.push(self.update_installed());
-                match self.mode {
-                    Mode::Normal => {
-                        tasks.push(self.update_updates());
-                    }
-                    Mode::GStreamer { .. } => {}
-                }
-                return Task::batch(tasks);
+            Message::Backends(_)
+            | Message::CheckUpdates
+            | Message::UpdateAll
+            | Message::Updates(_) => {
+                return self.handle_backend_message(message);
             }
-            Message::CategoryResults(categories, results) => {
-                self.category_results = Some((categories, results));
-                return self.update_scroll();
+            Message::DialogCancel | Message::DialogConfirm | Message::DialogPage(_) => {
+                return self.handle_dialog_message(message);
             }
-            Message::CheckUpdates => {
-                //TODO: this only checks updates if they have already been checked
-                if self.updates.take().is_some() {
-                    if self.pending_operations.is_empty() {
-                        return self.update_backends(true);
-                    } else {
-                        log::warn!("cannot check for updates, operations are in progress");
-                    }
-                } else {
-                    log::warn!("already checking for updates");
-                }
+            Message::Operation(_, _, _, _)
+            | Message::PendingComplete(_)
+            | Message::PendingDismiss
+            | Message::PendingError(_, _)
+            | Message::PendingProgress(_, _)
+            | Message::RepositoryAdd(_, _)
+            | Message::RepositoryAddDialog(_) => {
+                return self.handle_operation_message(message);
             }
-            Message::Config(config) => {
-                if config != self.config {
-                    log::info!("update config");
-                    //TODO: update syntax theme by clearing tabs, only if needed
-                    self.config = config;
-                    return self.update_config();
-                }
+            Message::CategoryResults(_, _)
+            | Message::SearchActivate
+            | Message::SearchClear
+            | Message::SearchInput(_)
+            | Message::SearchResults(..)
+            | Message::SearchSortMode(_)
+            | Message::SearchSubmit(_)
+            | Message::WaylandFilter(_) => {
+                return self.handle_search_message(message);
             }
-            Message::DialogCancel => {
-                self.dialog_pages.pop_front();
-                self.uninstall_purge_data = false;
+            Message::Select(_, _, _, _)
+            | Message::SelectInstalled(_)
+            | Message::SelectUpdates(_)
+            | Message::SelectNone
+            | Message::SelectCategoryResult(_)
+            | Message::SelectExploreResult(_, _)
+            | Message::SelectSearchResult(_)
+            | Message::SelectedAddonsViewMore(_)
+            | Message::SelectedScreenshot(..)
+            | Message::SelectedScreenshotShown(_)
+            | Message::SelectedSource(_) => {
+                return self.handle_selection_message(message);
             }
-            Message::DialogConfirm => match self.dialog_pages.pop_front() {
-                Some(DialogPage::RepositoryRemove(backend_name, repo_rm)) => {
-                    self.operation(Operation {
-                        kind: OperationKind::RepositoryRemove(repo_rm.rms, true),
-                        backend_name,
-                        package_ids: Vec::new(),
-                        infos: Vec::new(),
-                    });
-                }
-                Some(DialogPage::Uninstall(backend_name, id, info)) => {
-                    let purge_data = self.uninstall_purge_data;
-                    self.uninstall_purge_data = false;
-                    return self.update(Message::Operation(
-                        OperationKind::Uninstall { purge_data },
-                        backend_name,
-                        id,
-                        info,
-                    ));
-                }
-                _ => {}
-            },
-            Message::DialogPage(dialog_page) => {
-                self.dialog_pages.push_back(dialog_page);
+            Message::RepositoryRemove(backend_name, repo_rms) => {
+                self.operation(Operation {
+                    kind: OperationKind::RepositoryRemove(repo_rms, false),
+                    backend_name,
+                    package_ids: Vec::new(),
+                    infos: Vec::new(),
+                });
+            }
+            Message::ToggleUninstallPurgeData(value) => {
+                self.uninstall_purge_data = value;
             }
             Message::ExplorePage(explore_page_opt) => {
                 self.explore_page_opt = explore_page_opt;
@@ -3707,7 +3072,7 @@ impl Application for App {
                             for (i, result) in results.iter().enumerate() {
                                 let installed = Self::is_installed_inner(
                                     &self.installed,
-                                    result.backend_name,
+                                    result.backend_name(),
                                     &result.id,
                                     &result.info,
                                 );
@@ -3719,11 +3084,14 @@ impl Application for App {
                                     };
                                     eprintln!(
                                         "{:?} {:?} from backend {} and info {:?}",
-                                        kind, result.id, result.backend_name, result.info
+                                        kind,
+                                        result.id,
+                                        result.backend_name(),
+                                        result.info
                                     );
                                     ops.push(Operation {
                                         kind,
-                                        backend_name: result.backend_name,
+                                        backend_name: result.backend_name(),
                                         package_ids: vec![result.id.clone()],
                                         infos: vec![result.info.clone()],
                                     });
@@ -3751,9 +3119,7 @@ impl Application for App {
 
                 self.update_apps();
                 let mut commands = Vec::new();
-                //TODO: search not done if item is selected because that would clear selection
-                if self.search_active && self.selected_opt.is_none() {
-                    // Update search if active
+                if self.search_active && self.details_page_opt.is_none() {
                     commands.push(self.search());
                 }
                 match self.mode {
@@ -3778,7 +3144,6 @@ impl Application for App {
                 self.installed_results = Some(installed_results);
             }
             Message::Key(modifiers, key, text) => {
-                // Handle ESC key to close dialogs
                 if !self.dialog_pages.is_empty()
                     && matches!(key, Key::Named(key::Named::Escape))
                     && !modifiers.logo()
@@ -3795,7 +3160,6 @@ impl Application for App {
                     }
                 }
 
-                // Uncaptured keys with only shift modifiers go to the search box
                 if !modifiers.logo()
                     && !modifiers.control()
                     && !modifiers.alt()
@@ -3819,7 +3183,6 @@ impl Application for App {
             },
             Message::MaybeExit => {
                 if self.core.main_window_id().is_none() && self.pending_operations.is_empty() {
-                    // Exit if window is closed and there are no pending operations
                     process::exit(0);
                 }
             }
@@ -3830,469 +3193,16 @@ impl Application for App {
             Message::OpenDesktopId(desktop_id) => {
                 return self.open_desktop_id(desktop_id);
             }
-            Message::Operation(kind, backend_name, package_id, info) => {
-                self.operation(Operation {
-                    kind,
-                    backend_name,
-                    package_ids: vec![package_id],
-                    infos: vec![info],
-                });
-            }
-            Message::PendingComplete(id) => {
-                if let Some((op, _)) = self.pending_operations.remove(&id) {
-                    for (package_id, info) in op.package_ids.iter().zip(op.infos.iter()) {
-                        self.waiting_installed.push((
-                            op.backend_name,
-                            info.source_id.clone(),
-                            package_id.clone(),
-                        ));
-                        self.waiting_updates.push((
-                            op.backend_name,
-                            info.source_id.clone(),
-                            package_id.clone(),
-                        ));
-                    }
-                    self.complete_operations.insert(id, op);
-                }
-                // Close progress notification if all relavent operations are finished
-                if self.pending_operations.is_empty() {
-                    self.progress_operations.clear();
-
-                    // If repos were changing, update backends
-                    if !self.repos_changing.is_empty() {
-                        return Task::batch([
-                            self.update_notification(),
-                            self.update_backends(true),
-                        ]);
-                    }
-                }
-                return Task::batch([
-                    self.update_notification(),
-                    self.update_installed(),
-                    self.update_updates(),
-                ]);
-            }
-            Message::PendingDismiss => {
-                self.progress_operations.clear();
-            }
-            Message::PendingError(id, err) => {
-                log::warn!("operation {id} failed: {err}");
-                if let Some((op, progress)) = self.pending_operations.remove(&id) {
-                    self.failed_operations.insert(id, (op, progress, err));
-                    self.dialog_pages.push_back(DialogPage::FailedOperation(id));
-                }
-                // Close progress notification if all relavent operations are finished
-                if self.pending_operations.is_empty() {
-                    self.progress_operations.clear();
-
-                    // If repos were changing, update backends
-                    if !self.repos_changing.is_empty() {
-                        return Task::batch([
-                            self.update_notification(),
-                            self.update_backends(true),
-                        ]);
-                    }
-                }
-                return self.update_notification();
-            }
-            Message::PendingProgress(id, new_progress) => {
-                if let Some((_, progress)) = self.pending_operations.get_mut(&id) {
-                    *progress = new_progress;
-                }
-                return self.update_notification();
-            }
-            Message::RepositoryAdd(backend_name, adds) => {
-                self.operation(Operation {
-                    kind: OperationKind::RepositoryAdd(adds),
-                    backend_name,
-                    package_ids: Vec::new(),
-                    infos: Vec::new(),
-                });
-            }
-            Message::RepositoryAddDialog(backend_name) => {
-                //TODO: support other backends?
-                if backend_name == "flatpak-user" {
-                    #[cfg(feature = "xdg-portal")]
-                    return Task::perform(
-                        async move {
-                            use cosmic::dialog::file_chooser::{self, FileFilter};
-                            let error_dialog = |err| {
-                                action::app(Message::DialogPage(DialogPage::RepositoryAddError(
-                                    err,
-                                )))
-                            };
-                            let filter = FileFilter::new("Flatpak repo file").glob("*.flatpakrepo");
-                            let dialog = file_chooser::open::Dialog::new().filter(filter);
-                            let path = match dialog.open_file().await {
-                                Ok(response) => {
-                                    let url = response.url();
-                                    match url.scheme() {
-                                        "file" => url.to_file_path().unwrap(),
-                                        other => {
-                                            return error_dialog(format!(
-                                                "{url} has unknown scheme: {other}"
-                                            ));
-                                        }
-                                    }
-                                }
-                                Err(file_chooser::Error::Cancelled) => {
-                                    return action::none();
-                                }
-                                Err(err) => {
-                                    return error_dialog(format!(
-                                        "failed to import repository: {err}"
-                                    ));
-                                }
-                            };
-                            let id = match path.file_stem() {
-                                Some(stem) => stem.to_string_lossy().to_string(),
-                                None => {
-                                    return error_dialog(format!(
-                                        "{path:?} does not have file stem"
-                                    ));
-                                }
-                            };
-                            let data = match tokio::fs::read(&path).await {
-                                Ok(ok) => ok,
-                                Err(err) => {
-                                    return error_dialog(format!("failed to read {path:?}: {err}"));
-                                }
-                            };
-                            action::app(Message::RepositoryAdd(
-                                backend_name,
-                                vec![RepositoryAdd { id, data }],
-                            ))
-                        },
-                        |x| x,
-                    );
-                }
-                log::error!("no support for adding repositories to {}", backend_name);
-            }
-            Message::RepositoryRemove(backend_name, rms) => {
-                self.operation(Operation {
-                    kind: OperationKind::RepositoryRemove(rms, false),
-                    backend_name,
-                    package_ids: Vec::new(),
-                    infos: Vec::new(),
-                });
-            }
             Message::ScrollView(viewport) => {
                 self.scroll_views.insert(self.scroll_context(), viewport);
             }
-            Message::SearchActivate => {
-                self.search_active = true;
-                return widget::text_input::focus(self.search_id.clone());
-            }
-            Message::SearchClear => {
-                self.search_active = false;
-                self.search_input.clear();
-                if self.search_results.take().is_some() {
-                    return self.update_scroll();
-                }
-            }
-            Message::SearchInput(input) => {
-                if input != self.search_input {
-                    self.search_input = input;
-                    // This performs live search
-                    if !self.search_input.is_empty() {
-                        return self.search();
-                    }
-                }
-            }
-            Message::SearchResults(input, results, auto_select) => {
-                if input == self.search_input {
-                    // Clear selected item so search results can be shown
-                    self.selected_opt = None;
-                    if auto_select && results.len() == 1 {
-                        // This drops update_scroll's command, it will be done again later
-                        let _ = self.select(
-                            results[0].backend_name,
-                            results[0].id.clone(),
-                            results[0].icon_opt.clone(),
-                            results[0].info.clone(),
-                        );
-                    }
-                    let mut tasks = Vec::with_capacity(2);
-                    match &mut self.mode {
-                        Mode::Normal => {}
-                        Mode::GStreamer { selected, .. } => {
-                            // Update selected results for gstreamer mode
-                            selected.clear();
-                            if results.is_empty() {
-                                // No results, means we should exit
-                                return self
-                                    .update(Message::GStreamerExit(GStreamerExitCode::NotFound));
-                            }
-                            for (i, result) in results.iter().enumerate() {
-                                if Self::is_installed_inner(
-                                    &self.installed,
-                                    result.backend_name,
-                                    &result.id,
-                                    &result.info,
-                                ) {
-                                    selected.insert(i);
-                                }
-                            }
-                            // Create window if needed
-                            if self.core.main_window_id().is_none() {
-                                // Create window if required
-                                let size = Size::new(640.0, 464.0);
-                                let mut settings = window::Settings {
-                                    decorations: false,
-                                    exit_on_close_request: false,
-                                    min_size: Some(size),
-                                    resizable: true,
-                                    size,
-                                    transparent: true,
-                                    ..Default::default()
-                                };
-
-                                #[cfg(target_os = "linux")]
-                                {
-                                    // Use the dialog ID to make it float
-                                    settings.platform_specific.application_id =
-                                        "com.system76.CosmicStoreDialog".to_string();
-                                }
-
-                                let (window_id, task) = window::open(settings);
-                                self.core.set_main_window_id(Some(window_id));
-                                tasks.push(task.map(|_id| action::none()));
-                            }
-                        }
-                    }
-                    self.search_results = Some((input, results));
-                    tasks.push(self.update_scroll());
-                    return Task::batch(tasks);
-                } else {
-                    log::warn!(
-                        "received {} results for {:?} after search changed to {:?}",
-                        results.len(),
-                        input,
-                        self.search_input
-                    );
-                }
-            }
-            Message::SearchSubmit(_search_input) => {
-                if !self.search_input.is_empty() {
-                    return self.search();
-                }
-            }
-            Message::SearchSortMode(sort_mode) => {
-                self.search_sort_mode = sort_mode;
-                if !self.search_input.is_empty() {
-                    return self.search();
-                }
-            }
-            Message::WaylandFilter(filter) => {
-                self.wayland_filter = filter;
-                if !self.search_input.is_empty() {
-                    return self.search();
-                }
-            }
-            Message::Select(backend_name, id, icon, info) => {
-                return self.select(backend_name, id, icon, info);
-            }
-            Message::SelectInstalled(result_i) => {
-                if let Some(results) = &self.installed_results {
-                    match results.get(result_i) {
-                        Some(result) => {
-                            return self.select(
-                                result.backend_name,
-                                result.id.clone(),
-                                result.icon_opt.clone(),
-                                result.info.clone(),
-                            );
-                        }
-                        None => {
-                            log::error!("failed to find installed result with index {}", result_i);
-                        }
-                    }
-                }
-            }
-            Message::SelectUpdates(updates_i) => {
-                if let Some(updates) = &self.updates {
-                    match updates
-                        .get(updates_i)
-                        .map(|(backend_name, package)| (backend_name, package.clone()))
-                    {
-                        Some((backend_name, package)) => {
-                            return self.select(
-                                backend_name,
-                                package.id,
-                                Some(package.icon),
-                                package.info,
-                            );
-                        }
-                        None => {
-                            log::error!("failed to find updates package with index {}", updates_i);
-                        }
-                    }
-                }
-            }
-            Message::SelectNone => {
-                self.selected_opt = None;
-                return self.update_scroll();
-            }
-            Message::SelectCategoryResult(result_i) => {
-                if let Some((_, results)) = &self.category_results {
-                    match results.get(result_i) {
-                        Some(result) => {
-                            return self.select(
-                                result.backend_name,
-                                result.id.clone(),
-                                result.icon_opt.clone(),
-                                result.info.clone(),
-                            );
-                        }
-                        None => {
-                            log::error!("failed to find category result with index {}", result_i);
-                        }
-                    }
-                }
-            }
-            Message::SelectExploreResult(explore_page, result_i) => {
-                if let Some(results) = self.explore_results.get(&explore_page) {
-                    match results.get(result_i) {
-                        Some(result) => {
-                            return self.select(
-                                result.backend_name,
-                                result.id.clone(),
-                                result.icon_opt.clone(),
-                                result.info.clone(),
-                            );
-                        }
-                        None => {
-                            log::error!(
-                                "failed to find {:?} result with index {}",
-                                explore_page,
-                                result_i
-                            );
-                        }
-                    }
-                }
-            }
-            Message::SelectSearchResult(result_i) => {
-                if let Some((_input, results)) = &self.search_results {
-                    match results.get(result_i) {
-                        Some(result) => {
-                            return self.select(
-                                result.backend_name,
-                                result.id.clone(),
-                                result.icon_opt.clone(),
-                                result.info.clone(),
-                            );
-                        }
-                        None => {
-                            log::error!("failed to find search result with index {}", result_i);
-                        }
-                    }
-                }
-            }
-            Message::SelectedAddonsViewMore(addons_view_more) => {
-                if let Some(selected) = &mut self.selected_opt {
-                    selected.addons_view_more = addons_view_more;
-                }
-            }
-            Message::SelectedScreenshot(i, url, data) => {
-                if let Some(selected) = &mut self.selected_opt {
-                    if let Some(screenshot) = selected.info.screenshots.get(i) {
-                        if screenshot.url == url {
-                            selected
-                                .screenshot_images
-                                .insert(i, widget::image::Handle::from_bytes(data));
-                        }
-                    }
-                }
-            }
-            Message::SelectedScreenshotShown(i) => {
-                if let Some(selected) = &mut self.selected_opt {
-                    selected.screenshot_shown = i;
-                }
-            }
-            Message::ToggleUninstallPurgeData(value) => {
-                self.uninstall_purge_data = value;
-            }
-            Message::SelectedSource(i) => {
-                //TODO: show warnings if anything is not found?
-                let mut next_ids = None;
-                if let Some(selected) = &self.selected_opt {
-                    if let Some(source) = selected.sources.get(i) {
-                        next_ids = Some((
-                            source.backend_name,
-                            source.source_id.clone(),
-                            selected.id.clone(),
-                        ));
-                    }
-                }
-
-                //TODO: can this be simplified?
-                if let Some((backend_name, source_id, id)) = next_ids {
-                    if let Some(backend) = self.backends.get(backend_name) {
-                        for appstream_cache in backend.info_caches() {
-                            if appstream_cache.source_id == source_id {
-                                if let Some(info) = appstream_cache.infos.get(&id) {
-                                    return self.select(
-                                        backend_name,
-                                        id,
-                                        Some(appstream_cache.icon(info)),
-                                        info.clone(),
-                                    );
-                                }
-                            }
-                        }
-                    }
-
-                    // Search for installed item if appstream cache had no info (for system packages)
-                    if let Some(installed) = &self.installed {
-                        for (installed_backend_name, package) in installed {
-                            if installed_backend_name == &backend_name
-                                && package.info.source_id == source_id
-                                && package.id == id
-                            {
-                                return self.select(
-                                    backend_name,
-                                    id,
-                                    Some(package.icon.clone()),
-                                    package.info.clone(),
-                                );
-                            }
-                        }
-                    }
-                }
-            }
-            Message::SystemThemeModeChange(_theme_mode) => {
-                return self.update_config();
-            }
             Message::ToggleContextPage(context_page) => {
-                //TODO: ensure context menus are closed
-                if self.context_page == context_page {
-                    self.core.window.show_context = !self.core.window.show_context;
+                if self.core.window.show_context && self.context_page == context_page {
+                    self.core.window.show_context = false;
                 } else {
                     self.context_page = context_page;
                     self.core.window.show_context = true;
                 }
-            }
-            Message::UpdateAll => {
-                if let Some(updates) = &self.updates {
-                    let mut ops = HashMap::with_capacity(self.backends.len());
-                    for (backend_name, package) in updates.iter() {
-                        let op = ops.entry(*backend_name).or_insert_with(|| Operation {
-                            kind: OperationKind::Update,
-                            backend_name,
-                            package_ids: Vec::new(),
-                            infos: Vec::new(),
-                        });
-                        op.package_ids.push(package.id.clone());
-                        op.infos.push(package.info.clone());
-                    }
-                    for (_backend_name, op) in ops {
-                        self.operation(op);
-                    }
-                }
-            }
-            Message::Updates(updates) => {
-                self.updates = Some(updates);
-                self.waiting_updates.clear();
             }
             Message::WindowClose => {
                 if let Some(window_id) = self.core.main_window_id() {
@@ -4700,14 +3610,14 @@ impl Application for App {
                             },
                         )
                         .width(Length::Fixed(200.0))
-                        .into()
+                        .into(),
                     ]
                 } else {
                     vec![
                         widget::button::icon(widget::icon::from_name("system-search-symbolic"))
                             .on_press(Message::SearchActivate)
                             .padding(8)
-                            .into()
+                            .into(),
                     ]
                 }
             }
@@ -5045,7 +3955,7 @@ impl Application for App {
             ));
         }
 
-        if let Some(selected) = &self.selected_opt {
+        if let Some(selected) = &self.details_page_opt {
             for (screenshot_i, screenshot) in selected.info.screenshots.iter().enumerate() {
                 let url = screenshot.url.clone();
                 subscriptions.push(Subscription::run_with_id(

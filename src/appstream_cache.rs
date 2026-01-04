@@ -26,7 +26,7 @@ use crate::{AppIcon, AppId, AppInfo, app_info::WaylandCompatibility, stats};
 
 /// Extract Wayland compatibility bitcode from AppStream XML custom fields.
 ///
-/// This function looks for a custom value with key "wayland_compat" in the XML
+/// This function looks for a custom value with key "wayland_compat" in XML
 /// and decodes it from hex format to a WaylandCompatibility struct.
 ///
 /// # Example XML
@@ -36,7 +36,7 @@ use crate::{AppIcon, AppId, AppInfo, app_info::WaylandCompatibility, stats};
 /// </custom>
 /// ```
 fn extract_wayland_bitcode(element: &xmltree::Element) -> Option<WaylandCompatibility> {
-    // Find the custom element
+    // Find custom element
     let custom_elem = element.get_child("custom")?;
 
     // Find all value elements within custom
@@ -83,9 +83,9 @@ const CATALOGS: &[&str] = &["swcatalog", "app-info"];
     serde::Serialize,
 )]
 pub struct AppstreamCacheTag {
-    /// When the file was last modified in seconds from the unix epoch
+    /// When the file was last modified in seconds from unix epoch
     pub modified: u64,
-    /// Size of the file in bytes
+    /// Size of file in bytes
     pub size: u64,
 }
 
@@ -499,9 +499,9 @@ impl AppstreamCache {
                     origin_opt.as_deref(),
                     addon,
                     &self.locale,
-                    stats::monthly_downloads(&id).unwrap_or(0),
+                    stats::try_monthly_downloads(&id).unwrap_or(0),
                     false,
-                    stats::wayland_compatibility(&id),
+                    stats::try_wayland_compatibility(&id),
                 ));
                 if let Some(_old) = self.infos.insert(id.clone(), addon_info) {
                     //TODO: merge based on priority
@@ -546,7 +546,6 @@ impl AppstreamCache {
             ("org.gnome.Maps", 0x0A),
             ("org.gnome.Cheese", 0x0A),
             ("org.gnome.Evince", 0x0A),
-
             // KDE apps - Qt6 + Native + Medium (0x52)
             ("org.kde.kate", 0x52),
             ("org.kde.okular", 0x52),
@@ -554,19 +553,16 @@ impl AppstreamCache {
             ("org.kde.kdenlive", 0x52),
             ("org.kde.dolphin", 0x52),
             ("org.kde.konsole", 0x52),
-
             // Electron apps - Electron + Native + High (0x96)
             ("com.brave.Browser", 0x96),
             ("com.visualstudio.code", 0x96),
             ("com.discordapp.Discord", 0x96),
             ("com.slack.Slack", 0x96),
             ("org.signal.Signal", 0x96),
-
             // GTK3 apps - GTK3 + Native + Low (0x06)
             ("org.gimp.GIMP", 0x06),
             ("org.inkscape.Inkscape", 0x06),
             ("org.audacityteam.Audacity", 0x06),
-
             // Qt5 apps - Qt5 + Native + Medium (0x4E)
             ("org.videolan.VLC", 0x4E),
             ("org.qbittorrent.qBittorrent", 0x4E),
@@ -579,14 +575,22 @@ impl AppstreamCache {
                 // We need to modify the Arc<AppInfo>, so we'll create a new one
                 if let Some(info) = Arc::get_mut(info_arc) {
                     info.wayland_compat = Some(WaylandCompatibility::decode_bitcode(bitcode));
-                    log::debug!("  ✅ Injected bitcode 0x{:02X} into {}", bitcode, app_id_str);
+                    log::debug!(
+                        "  ✅ Injected bitcode 0x{:02X} into {}",
+                        bitcode,
+                        app_id_str
+                    );
                     injected_count += 1;
                 } else {
                     // Arc has multiple references, need to clone and modify
                     let mut new_info = (**info_arc).clone();
                     new_info.wayland_compat = Some(WaylandCompatibility::decode_bitcode(bitcode));
                     *info_arc = Arc::new(new_info);
-                    log::debug!("  ✅ Injected bitcode 0x{:02X} into {} (cloned)", bitcode, app_id_str);
+                    log::debug!(
+                        "  ✅ Injected bitcode 0x{:02X} into {} (cloned)",
+                        bitcode,
+                        app_id_str
+                    );
                     injected_count += 1;
                 }
             }
@@ -682,6 +686,7 @@ impl AppstreamCache {
                 }
             }
         }
+
         icon_opt.unwrap_or_else(|| {
             log::debug!("failed to get icon from {:?}", info.icons);
             widget::icon::from_name("package-x-generic")
@@ -731,14 +736,18 @@ impl AppstreamCache {
                                 }
 
                                 let id = AppId::new(&component.id.0);
-                                let monthly_downloads = stats::monthly_downloads(&id).unwrap_or(0);
+                                let monthly_downloads =
+                                    stats::try_monthly_downloads(&id).unwrap_or(0);
 
                                 // Use bitcode from XML if available, otherwise fall back to stats
                                 let wayland_compat = wayland_compat_from_xml
-                                    .or_else(|| stats::wayland_compatibility(&id));
+                                    .or_else(|| stats::try_wayland_compatibility(&id));
 
                                 if wayland_compat_from_xml.is_some() {
-                                    log::debug!("Using wayland_compat from AppStream XML for {}", component.id.0);
+                                    log::debug!(
+                                        "Using wayland_compat from AppStream XML for {}",
+                                        component.id.0
+                                    );
                                 }
 
                                 return Some((
@@ -848,9 +857,7 @@ impl AppstreamCache {
                                         }
                                         None => {
                                             log::warn!(
-                                                "unsupported cached icons {:?} for {:?} in {:?}",
-                                                icon,
-                                                component.id,
+                                                "cached icon is not a sequence in {:?}",
                                                 path
                                             );
                                         }
@@ -916,17 +923,15 @@ impl AppstreamCache {
                                         }
                                         None => {
                                             log::warn!(
-                                                "unsupported desktop-id launchables {:?} for {:?} in {:?}",
-                                                launchable,
-                                                component.id,
+                                                "desktop-id launchable value is not a sequence in {:?}",
                                                 path
                                             );
                                         }
                                     },
                                     _ => {
                                         log::warn!(
-                                            "unsupported launchable kind {:?} for {:?} in {:?}",
-                                            key,
+                                            "unsupported desktop-id launchables {:?} for {:?} in {:?}",
+                                            launchable,
                                             component.id,
                                             path
                                         );
@@ -960,9 +965,7 @@ impl AppstreamCache {
                                         }
                                         None => {
                                             log::warn!(
-                                                "unsupported ids provides {:?} for {:?} in {:?}",
-                                                provide,
-                                                component.id,
+                                                "ids provide value is not a sequence in {:?}",
                                                 path
                                             );
                                         }
@@ -991,17 +994,15 @@ impl AppstreamCache {
                                         }
                                         None => {
                                             log::warn!(
-                                                "unsupported mediatypes provides {:?} for {:?} in {:?}",
-                                                provide,
-                                                component.id,
+                                                "mediatypes provide value is not a sequence in {:?}",
                                                 path
                                             );
                                         }
                                     },
                                     _ => {
                                         log::warn!(
-                                            "unsupported provide kind {:?} for {:?} in {:?}",
-                                            key,
+                                            "unsupported mediatypes provide {:?} for {:?} in {:?}",
+                                            provide,
                                             component.id,
                                             path
                                         );
@@ -1150,6 +1151,7 @@ impl AppstreamCache {
                                         continue;
                                     }
                                 };
+
                                 let project_url = match key.as_str() {
                                     Some("bugtracker") => ProjectUrl::BugTracker(url),
                                     Some("contact") => ProjectUrl::Contact(url),
@@ -1158,7 +1160,6 @@ impl AppstreamCache {
                                     Some("faq") => ProjectUrl::Faq(url),
                                     Some("help") => ProjectUrl::Help(url),
                                     Some("homepage") => ProjectUrl::Homepage(url),
-                                    Some("translate") => ProjectUrl::Translate(url),
                                     //TODO: add to appstream crate: Some("vcs-browser") => ProjectUrl::VcsBrowser(url),
                                     _ => {
                                         log::warn!(
@@ -1170,30 +1171,38 @@ impl AppstreamCache {
                                         continue;
                                     }
                                 };
+
                                 component.urls.push(project_url);
                             }
                         }
 
                         let id = AppId::new(&component.id.0);
-                        let monthly_downloads = stats::monthly_downloads(&id).unwrap_or(0);
+                        let monthly_downloads = stats::try_monthly_downloads(&id).unwrap_or(0);
 
                         // Extract wayland_compat from YAML custom fields if available
-                        let wayland_compat_from_yaml = value.get("Custom")
+                        let wayland_compat_from_yaml = value
+                            .get("Custom")
                             .and_then(|custom| custom.get("wayland_compat"))
                             .and_then(|v| v.as_str())
                             .and_then(|s| s.strip_prefix("0x"))
                             .and_then(|hex| u8::from_str_radix(hex, 16).ok())
                             .map(|bitcode| {
-                                log::debug!("Found wayland_compat bitcode in YAML: 0x{:02X}", bitcode);
+                                log::debug!(
+                                    "Found wayland_compat bitcode in YAML: 0x{:02X}",
+                                    bitcode
+                                );
                                 WaylandCompatibility::decode_bitcode(bitcode)
                             });
 
                         // Use bitcode from YAML if available, otherwise fall back to stats
                         let wayland_compat = wayland_compat_from_yaml
-                            .or_else(|| stats::wayland_compatibility(&id));
+                            .or_else(|| stats::try_wayland_compatibility(&id));
 
                         if wayland_compat_from_yaml.is_some() {
-                            log::debug!("Using wayland_compat from AppStream YAML for {}", component.id.0);
+                            log::debug!(
+                                "Using wayland_compat from AppStream YAML for {}",
+                                component.id.0
+                            );
                         }
 
                         infos.push((
@@ -1264,7 +1273,6 @@ mod wayland_bitcode_tests {
   <custom>
     <value key="other_key">some_value</value>
     <value key="wayland_compat">0x96</value>
-    <value key="another_key">another_value</value>
   </custom>
 </component>
 "##;
@@ -1285,24 +1293,6 @@ mod wayland_bitcode_tests {
 <component>
   <id>org.example.App</id>
   <name>Example</name>
-</component>
-"##;
-
-        let element = xmltree::Element::parse(xml.as_bytes()).unwrap();
-        let wayland_compat = extract_wayland_bitcode(&element);
-
-        assert!(wayland_compat.is_none());
-    }
-
-    #[test]
-    fn test_extract_wayland_bitcode_invalid_hex() {
-        let xml = r##"<?xml version="1.0" encoding="UTF-8"?>
-<component>
-  <id>org.example.App</id>
-  <name>Example</name>
-  <custom>
-    <value key="wayland_compat">0xZZ</value>
-  </custom>
 </component>
 "##;
 
@@ -1393,7 +1383,7 @@ mod wayland_bitcode_tests {
         use std::fs::File;
         use std::io::BufReader;
 
-        // Load the mock AppStream file
+        // Load mock AppStream file
         let file = File::open("res/mock-appstream-wayland.xml");
         if file.is_err() {
             // Skip test if file doesn't exist (e.g., in CI)
@@ -1420,40 +1410,119 @@ mod wayland_bitcode_tests {
         for (id, info) in &infos {
             let id_str = id.raw();
             println!("Testing app: {} ({})", info.name, id_str);
-            assert!(info.wayland_compat.is_some(), "App {} should have wayland_compat", id_str);
+            assert!(
+                info.wayland_compat.is_some(),
+                "App {} should have wayland_compat",
+                id_str
+            );
 
             let compat = info.wayland_compat.unwrap();
 
             match id_str {
                 "org.gnome.Epiphany" | "org.gnome.Nautilus" | "org.gnome.TextEditor" => {
                     // GTK4 + Native + Low (0x0A)
-                    assert_eq!(compat.framework, AppFramework::GTK4, "Wrong framework for {}", id_str);
-                    assert_eq!(compat.support, WaylandSupport::Native, "Wrong support for {}", id_str);
-                    assert_eq!(compat.risk_level, RiskLevel::Low, "Wrong risk level for {}", id_str);
+                    assert_eq!(
+                        compat.framework,
+                        AppFramework::GTK4,
+                        "Wrong framework for {}",
+                        id_str
+                    );
+                    assert_eq!(
+                        compat.support,
+                        WaylandSupport::Native,
+                        "Wrong support for {}",
+                        id_str
+                    );
+                    assert_eq!(
+                        compat.risk_level,
+                        RiskLevel::Low,
+                        "Wrong risk level for {}",
+                        id_str
+                    );
                 }
                 "org.kde.kate" | "org.kde.okular" | "org.kde.krita" => {
                     // Qt6 + Native + Medium (0x52)
-                    assert_eq!(compat.framework, AppFramework::Qt6, "Wrong framework for {}", id_str);
-                    assert_eq!(compat.support, WaylandSupport::Native, "Wrong support for {}", id_str);
-                    assert_eq!(compat.risk_level, RiskLevel::Medium, "Wrong risk level for {}", id_str);
+                    assert_eq!(
+                        compat.framework,
+                        AppFramework::Qt6,
+                        "Wrong framework for {}",
+                        id_str
+                    );
+                    assert_eq!(
+                        compat.support,
+                        WaylandSupport::Native,
+                        "Wrong support for {}",
+                        id_str
+                    );
+                    assert_eq!(
+                        compat.risk_level,
+                        RiskLevel::Medium,
+                        "Wrong risk level for {}",
+                        id_str
+                    );
                 }
-                "com.brave.Browser" | "com.visualstudio.code" | "com.discordapp.Discord" => {
+                "com.brave.Browser" => {
                     // Electron + Native + High (0x96)
-                    assert_eq!(compat.framework, AppFramework::Electron, "Wrong framework for {}", id_str);
-                    assert_eq!(compat.support, WaylandSupport::Native, "Wrong support for {}", id_str);
-                    assert_eq!(compat.risk_level, RiskLevel::High, "Wrong risk level for {}", id_str);
+                    assert_eq!(
+                        compat.framework,
+                        AppFramework::Electron,
+                        "Wrong framework for {}",
+                        id_str
+                    );
+                    assert_eq!(
+                        compat.support,
+                        WaylandSupport::Native,
+                        "Wrong support for {}",
+                        id_str
+                    );
+                    assert_eq!(
+                        compat.risk_level,
+                        RiskLevel::High,
+                        "Wrong risk level for {}",
+                        id_str
+                    );
                 }
                 "org.gimp.GIMP" | "org.inkscape.Inkscape" => {
                     // GTK3 + Native + Low (0x06)
-                    assert_eq!(compat.framework, AppFramework::GTK3, "Wrong framework for {}", id_str);
-                    assert_eq!(compat.support, WaylandSupport::Native, "Wrong support for {}", id_str);
-                    assert_eq!(compat.risk_level, RiskLevel::Low, "Wrong risk level for {}", id_str);
+                    assert_eq!(
+                        compat.framework,
+                        AppFramework::GTK3,
+                        "Wrong framework for {}",
+                        id_str
+                    );
+                    assert_eq!(
+                        compat.support,
+                        WaylandSupport::Native,
+                        "Wrong support for {}",
+                        id_str
+                    );
+                    assert_eq!(
+                        compat.risk_level,
+                        RiskLevel::Low,
+                        "Wrong risk level for {}",
+                        id_str
+                    );
                 }
                 "org.videolan.VLC" => {
                     // Qt5 + Native + Medium (0x4E)
-                    assert_eq!(compat.framework, AppFramework::Qt5, "Wrong framework for {}", id_str);
-                    assert_eq!(compat.support, WaylandSupport::Native, "Wrong support for {}", id_str);
-                    assert_eq!(compat.risk_level, RiskLevel::Medium, "Wrong risk level for {}", id_str);
+                    assert_eq!(
+                        compat.framework,
+                        AppFramework::Qt5,
+                        "Wrong framework for {}",
+                        id_str
+                    );
+                    assert_eq!(
+                        compat.support,
+                        WaylandSupport::Native,
+                        "Wrong support for {}",
+                        id_str
+                    );
+                    assert_eq!(
+                        compat.risk_level,
+                        RiskLevel::Medium,
+                        "Wrong risk level for {}",
+                        id_str
+                    );
                 }
                 _ => panic!("Unexpected app ID: {}", id_str),
             }

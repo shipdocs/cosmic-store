@@ -540,7 +540,7 @@ impl Backend for Flatpak {
                                         ) == 0
                                         {
                                             let error_message = if error.is_null() {
-                                                format!("unspecified error")
+                                                "unspecified error".to_string()
                                             } else {
                                                 libflatpak::glib::Error::from_glib_ptr_borrow(
                                                     &error,

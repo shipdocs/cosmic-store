@@ -2,7 +2,7 @@ use cosmic::widget;
 use std::{collections::HashMap, error::Error, fmt::Write, fs, sync::Arc};
 
 use super::{Backend, Package};
-use crate::{AppId, AppInfo, AppUrl, AppstreamCache, Operation, OperationKind};
+use crate::{AppId, AppInfo, AppstreamCache, Operation};
 
 #[derive(Debug)]
 pub struct Pkgar {
@@ -25,7 +25,7 @@ impl Pkgar {
 }
 
 impl Backend for Pkgar {
-    fn load_caches(&mut self, refresh: bool) -> Result<(), Box<dyn Error>> {
+    fn load_caches(&mut self, _refresh: bool) -> Result<(), Box<dyn Error>> {
         for appstream_cache in self.appstream_caches.iter_mut() {
             appstream_cache.reload();
         }
@@ -47,18 +47,18 @@ impl Backend for Pkgar {
             let file_name = file_name_os.to_string_lossy();
             if file_name.ends_with(".pkgar_head") {
                 let package_name = file_name.trim_end_matches(".pkgar_head");
-                let version_opt = None; //TODO: get pkgar version
+                //TODO: get pkgar version
                 println!("installed: {}", package_name);
                 match appstream_cache.pkgnames.get(package_name) {
                     Some(ids) => {
                         for id in ids.iter() {
-                            match appstream_cache.infos.get(&id) {
+                            match appstream_cache.infos.get(id) {
                                 Some(info) => {
                                     packages.push(Package {
                                         id: id.clone(),
                                         icon: appstream_cache.icon(info),
                                         info: info.clone(),
-                                        version: version_opt.unwrap_or("").to_string(),
+                                        version: String::new(),
                                         extra: HashMap::new(),
                                     });
                                 }
@@ -73,7 +73,7 @@ impl Backend for Pkgar {
                         log::debug!("no components for package {}", package_name);
                         system_packages.push((
                             package_name.to_string(),
-                            version_opt.unwrap_or("").to_string(),
+                            String::new(),
                         ));
                     }
                 }
@@ -121,14 +121,14 @@ impl Backend for Pkgar {
         Ok(Vec::new())
     }
 
-    fn file_packages(&self, path: &str) -> Result<Vec<Package>, Box<dyn Error>> {
+    fn file_packages(&self, _path: &str) -> Result<Vec<Package>, Box<dyn Error>> {
         Err("Pkgar::file_packages not implemented".into())
     }
 
     fn operation(
         &self,
-        op: &Operation,
-        mut f: Box<dyn FnMut(f32) + 'static>,
+        _op: &Operation,
+        _f: Box<dyn FnMut(f32) + 'static>,
     ) -> Result<(), Box<dyn Error>> {
         Err("Pkgar::operation not implemented".into())
     }

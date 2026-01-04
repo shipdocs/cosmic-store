@@ -14,8 +14,9 @@ open = "5"
 paste = "1"
 rayon = "1"
 regex = "1"
-reqwest = { version = "0.12", features = ["blocking"] }
+reqwest = { version = "0.12", features = ["blocking", "json"] }
 serde = { version = "1", features = ["rc", "serde_derive"] }
+serde_json = "1"
 spdx = { git = "https://github.com/jackpot51/spdx.git" }
 tokio = { version = "1", features = ["sync"] }
 xdg = "3"
@@ -61,7 +62,7 @@ default = [
     "dbus-config",
     "desktop-systemd-scope",
     "flatpak",
-    "flathub-stats-v7",
+    "flathub-stats",
     "logind",
     "notify",
     "packagekit",
@@ -83,7 +84,10 @@ single-instance = ["libcosmic/single-instance"]
 wayland = ["libcosmic/wayland", "dep:cosmic-panel-config"]
 wgpu = ["libcosmic/wgpu"]
 xdg-portal = ["libcosmic/xdg-portal"]
+flathub-stats = ["flathub-stats-v8"]
+flathub-stats-v8 = ["flathub-stats-v7"]
 flathub-stats-v7 = []
+flathub-stats-v8-only = []
 
 [profile.release-with-debug]
 inherits = "release"

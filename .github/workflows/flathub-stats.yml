@@ -1,5 +1,34 @@
 name: Generate Flathub Stats
 
+# This workflow generates compiled statistics for the Cosmic Store:
+#
+# 1. DOWNLOAD STATISTICS
+#    - Fetches daily download counts from flathub.org for the previous month
+#    - Aggregates into monthly totals per app
+#
+# 2. WAYLAND COMPATIBILITY ANALYSIS
+#    - Fetches manifest.json from GitHub for each Flathub app
+#    - Parses finish-args to detect socket permissions:
+#      * --socket=wayland (native Wayland support)
+#      * --socket=x11 (X11 only)
+#      * --socket=fallback-x11 (XWayland fallback)
+#    - Detects framework (GTK3/4, Qt5/6, Electron, etc.)
+#    - Calculates risk level based on compatibility
+#
+# 3. OUTPUT FILES
+#    a) flathub-stats.bitcode-v0-8 (binary format)
+#       - generated_at: u64 (Unix timestamp)
+#       - downloads: HashMap<AppId, u64>
+#       - compatibility: HashMap<AppId, WaylandCompatibility>
+#       
+#       WaylandCompatibility is encoded as a struct with 3 enums:
+#       - support: WaylandSupport (Native/Fallback/X11Only/Unknown)
+#       - framework: AppFramework (GTK3/GTK4/Qt5/Qt6/Electron/etc)
+#       - risk_level: RiskLevel (Low/Medium/High/Critical)
+#
+#    b) flathub-metadata.json (human-readable)
+#       - version, generated_at, file_size, app_count
+
 on:
   schedule:
     # Run weekly on Sundays at 2 AM UTC
@@ -40,8 +69,11 @@ jobs:
       - name: Generate stats file
         run: |
           cd flathub-stats
+          # Compiles download stats and Wayland compatibility data
+          # into bitcode-v0-8 format with metadata.json companion
           cargo run --release
-          ls -lh ../res/flathub-stats.bitcode-v0-7
+          ls -lh ../res/flathub-stats.bitcode-v0-8
+          ls -lh ../res/flathub-metadata.json
 
       - name: Create Release
         env:
@@ -49,7 +81,6 @@ jobs:
         run: |
           # Get current date for release tag
           DATE=$(date +%Y-%m-%d)
-          TAG="stats-v0-7-${DATE}"
           
           # Delete existing 'latest' tag and release if it exists
           gh release delete latest --yes || true
@@ -59,11 +90,14 @@ jobs:
           gh release create latest \
             --title "Flathub Stats (Latest)" \
             --notes "Automatically generated Flathub statistics - Generated on ${DATE}" \
-            res/flathub-stats.bitcode-v0-7
+            res/flathub-stats.bitcode-v0-8 \
+            res/flathub-metadata.json
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: flathub-stats-bitcode-v0-7
-          path: res/flathub-stats.bitcode-v0-7
+          name: flathub-stats-v0-8
+          path: |
+            res/flathub-stats.bitcode-v0-8
+            res/flathub-metadata.json
           retention-days: 30

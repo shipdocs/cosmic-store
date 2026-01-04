@@ -1,7 +1,7 @@
 use std::{collections::HashMap, error::Error, fs};
 
-use chrono::{Datelike, Duration, Utc};
 use app_id::AppId;
+use chrono::{Datelike, Duration, Utc};
 #[path = "../../src/app_id.rs"]
 mod app_id;
 
@@ -10,7 +10,17 @@ pub struct Stats {
     refs: HashMap<String, HashMap<String, (u64, u64)>>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, bitcode::Encode, bitcode::Decode)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    serde::Serialize,
+    serde::Deserialize,
+    bitcode::Encode,
+    bitcode::Decode,
+)]
 pub enum WaylandSupport {
     Native,
     Fallback,
@@ -18,7 +28,17 @@ pub enum WaylandSupport {
     Unknown,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, bitcode::Encode, bitcode::Decode)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    serde::Serialize,
+    serde::Deserialize,
+    bitcode::Encode,
+    bitcode::Decode,
+)]
 pub enum AppFramework {
     Native,
     GTK3,
@@ -30,7 +50,17 @@ pub enum AppFramework {
     Unknown,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, bitcode::Encode, bitcode::Decode)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    serde::Serialize,
+    serde::Deserialize,
+    bitcode::Encode,
+    bitcode::Decode,
+)]
 pub enum RiskLevel {
     Low,
     Medium,
@@ -47,8 +77,17 @@ pub struct WaylandCompatibility {
 
 #[derive(serde::Serialize, serde::Deserialize, bitcode::Encode, bitcode::Decode)]
 struct FlathubStats {
+    generated_at: u64,
     downloads: HashMap<AppId, u64>,
     compatibility: HashMap<AppId, WaylandCompatibility>,
+}
+
+#[derive(serde::Serialize)]
+struct StatsMetadata {
+    version: &'static str,
+    generated_at: u64,
+    file_size: u64,
+    app_count: usize,
 }
 
 async fn stats(year: u16, month: u8, day: u8) -> Result<Stats, Box<dyn Error>> {
@@ -215,13 +254,24 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 }
             }
             Err(e) => {
-                eprintln!("Warning: Failed to fetch stats for {}/{}/{}: {}", year, month, day, e);
+                eprintln!(
+                    "Warning: Failed to fetch stats for {}/{}/{}: {}",
+                    year, month, day, e
+                );
             }
         }
     }
-    println!("Fetched stats for {} unique apps ({}/{} days)", ref_downloads.len(), days_fetched, days);
+    println!(
+        "Fetched stats for {} unique apps ({}/{} days)",
+        ref_downloads.len(),
+        days_fetched,
+        days
+    );
 
-    println!("Fetching compatibility data for {} apps...", ref_downloads.len());
+    println!(
+        "Fetching compatibility data for {} apps...",
+        ref_downloads.len()
+    );
     let mut compatibility_data = HashMap::<AppId, WaylandCompatibility>::new();
 
     let mut successful = 0;
@@ -248,10 +298,19 @@ async fn main() -> Result<(), Box<dyn Error>> {
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
     }
 
-    println!("Successfully fetched {} manifests, {} failed", successful, failed);
+    println!(
+        "Successfully fetched {} manifests, {} failed",
+        successful, failed
+    );
+
+    let generated_at = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
 
     let stats = FlathubStats {
-        downloads: ref_downloads,
+        generated_at,
+        downloads: ref_downloads.clone(),
         compatibility: compatibility_data,
     };
 
@@ -259,9 +318,24 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     // Ensure res directory exists
     fs::create_dir_all("../res")?;
-    fs::write("../res/flathub-stats.bitcode-v0-7", &bitcode)?;
 
-    println!("Saved to ../res/flathub-stats.bitcode-v0-7");
+    // Write v0-8 bitcode file
+    fs::write("../res/flathub-stats.bitcode-v0-8", &bitcode)?;
+    println!(
+        "Saved to ../res/flathub-stats.bitcode-v0-8 ({} bytes)",
+        bitcode.len()
+    );
+
+    // Write metadata.json
+    let metadata = StatsMetadata {
+        version: "v0-8",
+        generated_at,
+        file_size: bitcode.len() as u64,
+        app_count: ref_downloads.len(),
+    };
+    let metadata_json = serde_json::to_string_pretty(&metadata)?;
+    fs::write("../res/flathub-metadata.json", metadata_json)?;
+    println!("Saved metadata to ../res/flathub-metadata.json");
 
     Ok(())
 }

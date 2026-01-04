@@ -1845,10 +1845,10 @@ impl App {
                                     widget::Space::with_height(spacing.space_l).into(),
                                     widget::text::title3(fl!("loading")).into(),
                                     widget::Space::with_height(spacing.space_xs).into(),
-                                    widget::progress_bar(
-                                        0.0..=100.0,
-                                        (self.loading_frame % 200) as f32 / 2.0,
-                                    )
+                                    widget::progress_bar(0.0..=100.0, {
+                                        let cycle = (self.loading_frame % 200) as f32;
+                                        if cycle < 100.0 { cycle } else { 200.0 - cycle }
+                                    })
                                     .width(Length::Fixed(200.0))
                                     .into(),
                                 ])
@@ -1879,10 +1879,10 @@ impl App {
                                 widget::Space::with_height(spacing.space_l).into(),
                                 widget::text::title3(fl!("loading")).into(),
                                 widget::Space::with_height(spacing.space_xs).into(),
-                                widget::progress_bar(
-                                    0.0..=100.0,
-                                    (self.loading_frame % 200) as f32 / 2.0,
-                                )
+                                widget::progress_bar(0.0..=100.0, {
+                                    let cycle = (self.loading_frame % 200) as f32;
+                                    if cycle < 100.0 { cycle } else { 200.0 - cycle }
+                                })
                                 .width(Length::Fixed(200.0))
                                 .into(),
                             ])

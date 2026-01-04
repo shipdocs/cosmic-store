@@ -118,6 +118,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn")).init();
 
     localize::localize();
+    stats::load_stats_async();
 
     let cli = Cli::parse();
 
@@ -624,18 +625,7 @@ impl App {
                             }
                         }
 
-                        // PackageKit availability check (accurate)
-                        if *backend_name == "packagekit" && !info.pkgnames.is_empty() {
-                            if let Some(backend) = backends.get(*backend_name) {
-                                if !backend.is_package_available(&info.pkgnames) {
-                                    log::debug!(
-                                        "Filtering out {} - not available in PackageKit",
-                                        info.name
-                                    );
-                                    continue;
-                                }
-                            }
-                        }
+
                     }
 
                     if let Some(weight) = filter_map(id, info, *installed) {
@@ -2001,23 +1991,26 @@ impl App {
         Task::perform(
             async move {
                 tokio::task::spawn_blocking(move || {
-                    let mut installed = Vec::new();
-                    //TODO: par_iter?
-                    for (backend_name, backend) in backends.iter() {
-                        let start = Instant::now();
-                        match backend.installed() {
-                            Ok(packages) => {
-                                for package in packages {
-                                    installed.push((*backend_name, package));
+                    let mut installed: Vec<(&'static str, Package)> = backends
+                        .par_iter()
+                        .flat_map(|(backend_name, backend)| {
+                            let start = Instant::now();
+                            let mut installed = Vec::new();
+                            match backend.installed() {
+                                Ok(packages) => {
+                                    for package in packages {
+                                        installed.push((*backend_name, package));
+                                    }
+                                }
+                                Err(err) => {
+                                    log::error!("failed to list installed: {}", err);
                                 }
                             }
-                            Err(err) => {
-                                log::error!("failed to list installed: {}", err);
-                            }
-                        }
-                        let duration = start.elapsed();
-                        log::info!("loaded installed from {} in {:?}", backend_name, duration);
-                    }
+                            let duration = start.elapsed();
+                            log::info!("loaded installed from {} in {:?}", backend_name, duration);
+                            installed
+                        })
+                        .collect();
                     installed.par_sort_unstable_by(|a, b| {
                         let a_is_system = a.1.id.is_system();
                         let b_is_system = b.1.id.is_system();
@@ -2043,23 +2036,26 @@ impl App {
         Task::perform(
             async move {
                 tokio::task::spawn_blocking(move || {
-                    let mut updates = Vec::new();
-                    //TODO: par_iter?
-                    for (backend_name, backend) in backends.iter() {
-                        let start = Instant::now();
-                        match backend.updates() {
-                            Ok(packages) => {
-                                for package in packages {
-                                    updates.push((*backend_name, package));
+                    let mut updates: Vec<(&'static str, Package)> = backends
+                        .par_iter()
+                        .flat_map(|(backend_name, backend)| {
+                            let start = Instant::now();
+                            let mut updates = Vec::new();
+                            match backend.updates() {
+                                Ok(packages) => {
+                                    for package in packages {
+                                        updates.push((*backend_name, package));
+                                    }
+                                }
+                                Err(err) => {
+                                    log::error!("failed to list updates: {}", err);
                                 }
                             }
-                            Err(err) => {
-                                log::error!("failed to list updates: {}", err);
-                            }
-                        }
-                        let duration = start.elapsed();
-                        log::info!("loaded updates from {} in {:?}", backend_name, duration);
-                    }
+                            let duration = start.elapsed();
+                            log::info!("loaded updates from {} in {:?}", backend_name, duration);
+                            updates
+                        })
+                        .collect();
                     updates.par_sort_unstable_by(|a, b| {
                         if a.1.id.is_system() {
                             cmp::Ordering::Less

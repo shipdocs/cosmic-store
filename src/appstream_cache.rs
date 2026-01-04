@@ -546,7 +546,6 @@ impl AppstreamCache {
             ("org.gnome.Maps", 0x0A),
             ("org.gnome.Cheese", 0x0A),
             ("org.gnome.Evince", 0x0A),
-
             // KDE apps - Qt6 + Native + Medium (0x52)
             ("org.kde.kate", 0x52),
             ("org.kde.okular", 0x52),
@@ -554,19 +553,16 @@ impl AppstreamCache {
             ("org.kde.kdenlive", 0x52),
             ("org.kde.dolphin", 0x52),
             ("org.kde.konsole", 0x52),
-
             // Electron apps - Electron + Native + High (0x96)
             ("com.brave.Browser", 0x96),
             ("com.visualstudio.code", 0x96),
             ("com.discordapp.Discord", 0x96),
             ("com.slack.Slack", 0x96),
             ("org.signal.Signal", 0x96),
-
             // GTK3 apps - GTK3 + Native + Low (0x06)
             ("org.gimp.GIMP", 0x06),
             ("org.inkscape.Inkscape", 0x06),
             ("org.audacityteam.Audacity", 0x06),
-
             // Qt5 apps - Qt5 + Native + Medium (0x4E)
             ("org.videolan.VLC", 0x4E),
             ("org.qbittorrent.qBittorrent", 0x4E),
@@ -579,14 +575,22 @@ impl AppstreamCache {
                 // We need to modify the Arc<AppInfo>, so we'll create a new one
                 if let Some(info) = Arc::get_mut(info_arc) {
                     info.wayland_compat = Some(WaylandCompatibility::decode_bitcode(bitcode));
-                    log::debug!("  ✅ Injected bitcode 0x{:02X} into {}", bitcode, app_id_str);
+                    log::debug!(
+                        "  ✅ Injected bitcode 0x{:02X} into {}",
+                        bitcode,
+                        app_id_str
+                    );
                     injected_count += 1;
                 } else {
                     // Arc has multiple references, need to clone and modify
                     let mut new_info = (**info_arc).clone();
                     new_info.wayland_compat = Some(WaylandCompatibility::decode_bitcode(bitcode));
                     *info_arc = Arc::new(new_info);
-                    log::debug!("  ✅ Injected bitcode 0x{:02X} into {} (cloned)", bitcode, app_id_str);
+                    log::debug!(
+                        "  ✅ Injected bitcode 0x{:02X} into {} (cloned)",
+                        bitcode,
+                        app_id_str
+                    );
                     injected_count += 1;
                 }
             }
@@ -732,14 +736,18 @@ impl AppstreamCache {
                                 }
 
                                 let id = AppId::new(&component.id.0);
-                                let monthly_downloads = stats::try_monthly_downloads(&id).unwrap_or(0);
+                                let monthly_downloads =
+                                    stats::try_monthly_downloads(&id).unwrap_or(0);
 
                                 // Use bitcode from XML if available, otherwise fall back to stats
                                 let wayland_compat = wayland_compat_from_xml
                                     .or_else(|| stats::try_wayland_compatibility(&id));
 
                                 if wayland_compat_from_xml.is_some() {
-                                    log::debug!("Using wayland_compat from AppStream XML for {}", component.id.0);
+                                    log::debug!(
+                                        "Using wayland_compat from AppStream XML for {}",
+                                        component.id.0
+                                    );
                                 }
 
                                 return Some((
@@ -848,7 +856,10 @@ impl AppstreamCache {
                                             }
                                         }
                                         None => {
-                                            log::warn!("cached icon is not a sequence in {:?}", path);
+                                            log::warn!(
+                                                "cached icon is not a sequence in {:?}",
+                                                path
+                                            );
                                         }
                                     },
                                     Some("remote") => {
@@ -859,7 +870,7 @@ impl AppstreamCache {
                                             component.id,
                                             path
                                         );
-                                    },
+                                    }
                                     Some("stock") => match icon.as_str() {
                                         Some(stock) => {
                                             component.icons.push(Icon::Stock(stock.to_string()));
@@ -875,11 +886,11 @@ impl AppstreamCache {
                                     },
                                     _ => {
                                         log::warn!(
-                                                "unsupported icon kind {:?} for {:?} in {:?}",
-                                                key,
-                                                component.id,
-                                                path
-                                            );
+                                            "unsupported icon kind {:?} for {:?} in {:?}",
+                                            key,
+                                            component.id,
+                                            path
+                                        );
                                     }
                                 }
                             }
@@ -911,16 +922,19 @@ impl AppstreamCache {
                                             }
                                         }
                                         None => {
-                                            log::warn!("desktop-id launchable value is not a sequence in {:?}", path);
+                                            log::warn!(
+                                                "desktop-id launchable value is not a sequence in {:?}",
+                                                path
+                                            );
                                         }
                                     },
                                     _ => {
                                         log::warn!(
-                                                "unsupported desktop-id launchables {:?} for {:?} in {:?}",
-                                                launchable,
-                                                component.id,
-                                                path
-                                                );
+                                            "unsupported desktop-id launchables {:?} for {:?} in {:?}",
+                                            launchable,
+                                            component.id,
+                                            path
+                                        );
                                     }
                                 }
                             }
@@ -950,7 +964,10 @@ impl AppstreamCache {
                                             }
                                         }
                                         None => {
-                                            log::warn!("ids provide value is not a sequence in {:?}", path);
+                                            log::warn!(
+                                                "ids provide value is not a sequence in {:?}",
+                                                path
+                                            );
                                         }
                                     },
                                     Some("mediatypes") => match provide.as_sequence() {
@@ -976,16 +993,19 @@ impl AppstreamCache {
                                             }
                                         }
                                         None => {
-                                            log::warn!("mediatypes provide value is not a sequence in {:?}", path);
+                                            log::warn!(
+                                                "mediatypes provide value is not a sequence in {:?}",
+                                                path
+                                            );
                                         }
                                     },
                                     _ => {
                                         log::warn!(
-                                                "unsupported mediatypes provide {:?} for {:?} in {:?}",
-                                                provide,
-                                                component.id,
-                                                path
-                                                );
+                                            "unsupported mediatypes provide {:?} for {:?} in {:?}",
+                                            provide,
+                                            component.id,
+                                            path
+                                        );
                                     }
                                 }
                             }
@@ -1087,7 +1107,7 @@ impl AppstreamCache {
                                                     );
                                                 }
                                             }
-                                    }
+                                        }
                                     }
 
                                     //TODO: thumbnails
@@ -1112,21 +1132,22 @@ impl AppstreamCache {
                                         Ok(ok) => ok,
                                         Err(err) => {
                                             log::warn!(
-                                                "failed to parse url {:?} for {:?} in {:?}",
+                                                "failed to parse url {:?} for {:?} in {:?}: {}",
                                                 url_str,
                                                 component.id,
-                                                path
+                                                path,
+                                                err
                                             );
                                             continue;
                                         }
                                     },
                                     None => {
                                         log::warn!(
-                                                "unsupported url kind {:?} for {:?} in {:?}",
-                                                url_value,
-                                                component.id,
-                                                path
-                                            );
+                                            "unsupported url kind {:?} for {:?} in {:?}",
+                                            url_value,
+                                            component.id,
+                                            path
+                                        );
                                         continue;
                                     }
                                 };
@@ -1142,11 +1163,11 @@ impl AppstreamCache {
                                     //TODO: add to appstream crate: Some("vcs-browser") => ProjectUrl::VcsBrowser(url),
                                     _ => {
                                         log::warn!(
-                                                "unsupported url kind {:?} for {:?} in {:?}",
-                                                key,
-                                                component.id,
-                                                path
-                                                );
+                                            "unsupported url kind {:?} for {:?} in {:?}",
+                                            key,
+                                            component.id,
+                                            path
+                                        );
                                         continue;
                                     }
                                 };
@@ -1159,13 +1180,17 @@ impl AppstreamCache {
                         let monthly_downloads = stats::try_monthly_downloads(&id).unwrap_or(0);
 
                         // Extract wayland_compat from YAML custom fields if available
-                        let wayland_compat_from_yaml = value.get("Custom")
+                        let wayland_compat_from_yaml = value
+                            .get("Custom")
                             .and_then(|custom| custom.get("wayland_compat"))
                             .and_then(|v| v.as_str())
                             .and_then(|s| s.strip_prefix("0x"))
                             .and_then(|hex| u8::from_str_radix(hex, 16).ok())
                             .map(|bitcode| {
-                                log::debug!("Found wayland_compat bitcode in YAML: 0x{:02X}", bitcode);
+                                log::debug!(
+                                    "Found wayland_compat bitcode in YAML: 0x{:02X}",
+                                    bitcode
+                                );
                                 WaylandCompatibility::decode_bitcode(bitcode)
                             });
 
@@ -1174,7 +1199,10 @@ impl AppstreamCache {
                             .or_else(|| stats::try_wayland_compatibility(&id));
 
                         if wayland_compat_from_yaml.is_some() {
-                            log::debug!("Using wayland_compat from AppStream YAML for {}", component.id.0);
+                            log::debug!(
+                                "Using wayland_compat from AppStream YAML for {}",
+                                component.id.0
+                            );
                         }
 
                         infos.push((
@@ -1382,40 +1410,119 @@ mod wayland_bitcode_tests {
         for (id, info) in &infos {
             let id_str = id.raw();
             println!("Testing app: {} ({})", info.name, id_str);
-            assert!(info.wayland_compat.is_some(), "App {} should have wayland_compat", id_str);
+            assert!(
+                info.wayland_compat.is_some(),
+                "App {} should have wayland_compat",
+                id_str
+            );
 
             let compat = info.wayland_compat.unwrap();
 
             match id_str {
                 "org.gnome.Epiphany" | "org.gnome.Nautilus" | "org.gnome.TextEditor" => {
                     // GTK4 + Native + Low (0x0A)
-                    assert_eq!(compat.framework, AppFramework::GTK4, "Wrong framework for {}", id_str);
-                    assert_eq!(compat.support, WaylandSupport::Native, "Wrong support for {}", id_str);
-                    assert_eq!(compat.risk_level, RiskLevel::Low, "Wrong risk level for {}", id_str);
+                    assert_eq!(
+                        compat.framework,
+                        AppFramework::GTK4,
+                        "Wrong framework for {}",
+                        id_str
+                    );
+                    assert_eq!(
+                        compat.support,
+                        WaylandSupport::Native,
+                        "Wrong support for {}",
+                        id_str
+                    );
+                    assert_eq!(
+                        compat.risk_level,
+                        RiskLevel::Low,
+                        "Wrong risk level for {}",
+                        id_str
+                    );
                 }
                 "org.kde.kate" | "org.kde.okular" | "org.kde.krita" => {
                     // Qt6 + Native + Medium (0x52)
-                    assert_eq!(compat.framework, AppFramework::Qt6, "Wrong framework for {}", id_str);
-                    assert_eq!(compat.support, WaylandSupport::Native, "Wrong support for {}", id_str);
-                    assert_eq!(compat.risk_level, RiskLevel::Medium, "Wrong risk level for {}", id_str);
+                    assert_eq!(
+                        compat.framework,
+                        AppFramework::Qt6,
+                        "Wrong framework for {}",
+                        id_str
+                    );
+                    assert_eq!(
+                        compat.support,
+                        WaylandSupport::Native,
+                        "Wrong support for {}",
+                        id_str
+                    );
+                    assert_eq!(
+                        compat.risk_level,
+                        RiskLevel::Medium,
+                        "Wrong risk level for {}",
+                        id_str
+                    );
                 }
                 "com.brave.Browser" => {
                     // Electron + Native + High (0x96)
-                    assert_eq!(compat.framework, AppFramework::Electron, "Wrong framework for {}", id_str);
-                    assert_eq!(compat.support, WaylandSupport::Native, "Wrong support for {}", id_str);
-                    assert_eq!(compat.risk_level, RiskLevel::High, "Wrong risk level for {}", id_str);
+                    assert_eq!(
+                        compat.framework,
+                        AppFramework::Electron,
+                        "Wrong framework for {}",
+                        id_str
+                    );
+                    assert_eq!(
+                        compat.support,
+                        WaylandSupport::Native,
+                        "Wrong support for {}",
+                        id_str
+                    );
+                    assert_eq!(
+                        compat.risk_level,
+                        RiskLevel::High,
+                        "Wrong risk level for {}",
+                        id_str
+                    );
                 }
                 "org.gimp.GIMP" | "org.inkscape.Inkscape" => {
                     // GTK3 + Native + Low (0x06)
-                    assert_eq!(compat.framework, AppFramework::GTK3, "Wrong framework for {}", id_str);
-                    assert_eq!(compat.support, WaylandSupport::Native, "Wrong support for {}", id_str);
-                    assert_eq!(compat.risk_level, RiskLevel::Low, "Wrong risk level for {}", id_str);
+                    assert_eq!(
+                        compat.framework,
+                        AppFramework::GTK3,
+                        "Wrong framework for {}",
+                        id_str
+                    );
+                    assert_eq!(
+                        compat.support,
+                        WaylandSupport::Native,
+                        "Wrong support for {}",
+                        id_str
+                    );
+                    assert_eq!(
+                        compat.risk_level,
+                        RiskLevel::Low,
+                        "Wrong risk level for {}",
+                        id_str
+                    );
                 }
                 "org.videolan.VLC" => {
                     // Qt5 + Native + Medium (0x4E)
-                    assert_eq!(compat.framework, AppFramework::Qt5, "Wrong framework for {}", id_str);
-                    assert_eq!(compat.support, WaylandSupport::Native, "Wrong support for {}", id_str);
-                    assert_eq!(compat.risk_level, RiskLevel::Medium, "Wrong risk level for {}", id_str);
+                    assert_eq!(
+                        compat.framework,
+                        AppFramework::Qt5,
+                        "Wrong framework for {}",
+                        id_str
+                    );
+                    assert_eq!(
+                        compat.support,
+                        WaylandSupport::Native,
+                        "Wrong support for {}",
+                        id_str
+                    );
+                    assert_eq!(
+                        compat.risk_level,
+                        RiskLevel::Medium,
+                        "Wrong risk level for {}",
+                        id_str
+                    );
                 }
                 _ => panic!("Unexpected app ID: {}", id_str),
             }

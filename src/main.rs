@@ -12,7 +12,7 @@ mod search;
 use search::{SearchResult, SearchSortMode, WaylandFilter};
 
 mod pages;
-use pages::{DialogPage, ContextPage, ExplorePage, NavPage};
+use pages::{ContextPage, DialogPage, ExplorePage, NavPage};
 
 mod ui;
 use ui::{GridMetrics, package_card_view, styled_icon, wayland_compat_badge};
@@ -55,7 +55,7 @@ use app_id::AppId;
 mod app_id;
 
 use app_info::{
-    AppIcon, AppInfo, AppKind, AppProvide, AppUrl, WaylandSupport, AppFramework, RiskLevel,
+    AppFramework, AppIcon, AppInfo, AppKind, AppProvide, AppUrl, RiskLevel, WaylandSupport,
 };
 mod app_info;
 
@@ -624,8 +624,6 @@ impl App {
                                 continue;
                             }
                         }
-
-
                     }
 
                     if let Some(weight) = filter_map(id, info, *installed) {
@@ -650,18 +648,18 @@ impl App {
                     let compat_opt = info.wayland_compat_lazy();
                     let matches_filter = match wayland_filter {
                         WaylandFilter::All => true,
-                        WaylandFilter::Excellent => {
-                            compat_opt.map(|c| c.risk_level == RiskLevel::Low).unwrap_or(false)
-                        }
-                        WaylandFilter::Good => {
-                            compat_opt.map(|c| c.risk_level == RiskLevel::Medium).unwrap_or(false)
-                        }
-                        WaylandFilter::Caution => {
-                            compat_opt.map(|c| c.risk_level == RiskLevel::High).unwrap_or(false)
-                        }
-                        WaylandFilter::Limited => {
-                            compat_opt.map(|c| c.risk_level == RiskLevel::Critical).unwrap_or(false)
-                        }
+                        WaylandFilter::Excellent => compat_opt
+                            .map(|c| c.risk_level == RiskLevel::Low)
+                            .unwrap_or(false),
+                        WaylandFilter::Good => compat_opt
+                            .map(|c| c.risk_level == RiskLevel::Medium)
+                            .unwrap_or(false),
+                        WaylandFilter::Caution => compat_opt
+                            .map(|c| c.risk_level == RiskLevel::High)
+                            .unwrap_or(false),
+                        WaylandFilter::Limited => compat_opt
+                            .map(|c| c.risk_level == RiskLevel::Critical)
+                            .unwrap_or(false),
                         WaylandFilter::Unknown => compat_opt.is_none(),
                     };
 
@@ -773,8 +771,7 @@ impl App {
             async move {
                 tokio::task::spawn_blocking(move || {
                     let start = Instant::now();
-                    let applet_provide =
-                        AppProvide::Id("com.system76.CosmicApplet".to_string());
+                    let applet_provide = AppProvide::Id("com.system76.CosmicApplet".to_string());
                     let results = Self::generic_search(
                         &apps,
                         &backends,
@@ -797,7 +794,10 @@ impl App {
                                 }
                             }
                             None
-                        }, SearchSortMode::Relevance, WaylandFilter::All);
+                        },
+                        SearchSortMode::Relevance,
+                        WaylandFilter::All,
+                    );
                     let duration = start.elapsed();
                     log::info!(
                         "searched for categories {:?} in {:?}, found {} results",
@@ -1050,36 +1050,39 @@ impl App {
                             if !matches!(info.kind, AppKind::DesktopApplication) {
                                 return None;
                             }
-                        //TODO: improve performance
-                        let stats_weight = |weight: i64| -> i64 {
-                            //TODO: make sure no overflows
-                            (weight << 56) - (info.monthly_downloads as i64)
-                        };
+                            //TODO: improve performance
+                            let stats_weight = |weight: i64| -> i64 {
+                                //TODO: make sure no overflows
+                                (weight << 56) - (info.monthly_downloads as i64)
+                            };
 
-                        //TODO: fuzzy match (nucleus-matcher?)
-                        let regex_weight = |string: &str, weight: i64| -> Option<i64> {
-                            let mat = regex.find(string)?;
-                            if mat.range().start == 0 {
-                                if mat.range().end == string.len() {
-                                    Some(stats_weight(weight))
+                            //TODO: fuzzy match (nucleus-matcher?)
+                            let regex_weight = |string: &str, weight: i64| -> Option<i64> {
+                                let mat = regex.find(string)?;
+                                if mat.range().start == 0 {
+                                    if mat.range().end == string.len() {
+                                        Some(stats_weight(weight))
+                                    } else {
+                                        Some(stats_weight(weight + 1))
+                                    }
                                 } else {
-                                    Some(stats_weight(weight + 1))
+                                    Some(stats_weight(weight + 2))
                                 }
-                            } else {
-                                Some(stats_weight(weight + 2))
+                            };
+                            if let Some(weight) = regex_weight(&info.name, 0) {
+                                return Some(weight);
                             }
-                        };
-                        if let Some(weight) = regex_weight(&info.name, 0) {
-                            return Some(weight);
-                        }
-                        if let Some(weight) = regex_weight(&info.summary, 3) {
-                            return Some(weight);
-                        }
-                        if let Some(weight) = regex_weight(&info.description, 6) {
-                            return Some(weight);
-                        }
-                        None
-                    }, sort_mode, wayland_filter);
+                            if let Some(weight) = regex_weight(&info.summary, 3) {
+                                return Some(weight);
+                            }
+                            if let Some(weight) = regex_weight(&info.description, 6) {
+                                return Some(weight);
+                            }
+                            None
+                        },
+                        sort_mode,
+                        wayland_filter,
+                    );
                     let duration = start.elapsed();
                     log::info!(
                         "searched for {:?} in {:?}, found {} results",
@@ -1408,7 +1411,6 @@ impl App {
         }
     }
 
-
     fn handle_search_message(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::CategoryResults(categories, results) => {
@@ -1457,8 +1459,9 @@ impl App {
                         Mode::GStreamer { selected, .. } => {
                             selected.clear();
                             if results.is_empty() {
-                                return self
-                                    .handle_search_message(Message::GStreamerExit(GStreamerExitCode::NotFound));
+                                return self.handle_search_message(Message::GStreamerExit(
+                                    GStreamerExitCode::NotFound,
+                                ));
                             }
                             for (i, result) in results.iter().enumerate() {
                                 if Self::is_installed_inner(
@@ -1553,16 +1556,21 @@ impl App {
             }
             Message::CheckUpdates => self.update_updates(),
             Message::UpdateAll => {
-                let ops: Vec<_> = self.updates.as_ref().map(|updates| {
-                    updates.iter().map(|(backend_name, package)| {
-                        Operation {
-                            kind: OperationKind::Update,
-                            backend_name,
-                            package_ids: vec![package.id.clone()],
-                            infos: vec![package.info.clone()],
-                        }
-                    }).collect()
-                }).unwrap_or_default();
+                let ops: Vec<_> = self
+                    .updates
+                    .as_ref()
+                    .map(|updates| {
+                        updates
+                            .iter()
+                            .map(|(backend_name, package)| Operation {
+                                kind: OperationKind::Update,
+                                backend_name,
+                                package_ids: vec![package.id.clone()],
+                                infos: vec![package.info.clone()],
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default();
                 for op in ops {
                     self.operation(op);
                 }
@@ -1636,7 +1644,10 @@ impl App {
                             return self.update_backends(true);
                         }
                         _ => {
-                            return Task::batch(vec![self.update_installed(), self.update_updates()]);
+                            return Task::batch(vec![
+                                self.update_installed(),
+                                self.update_updates(),
+                            ]);
                         }
                     }
                 }
@@ -1647,9 +1658,8 @@ impl App {
                 if let Some((op, _)) = self.pending_operations.remove(&id) {
                     match &op.kind {
                         OperationKind::RepositoryAdd(_) | OperationKind::RepositoryRemove(_, _) => {
-                            self.repos_changing.retain(|(backend_name, _, _)| {
-                                backend_name != &op.backend_name
-                            });
+                            self.repos_changing
+                                .retain(|(backend_name, _, _)| backend_name != &op.backend_name);
                         }
                         _ => {}
                     }
@@ -1688,14 +1698,12 @@ impl App {
             Message::SelectInstalled(result_i) => {
                 if let Some(results) = &self.installed_results {
                     match results.get(result_i) {
-                        Some(result) => {
-                            self.select(
-                                result.backend_name(),
-                                result.id.clone(),
-                                result.icon_opt.clone(),
-                                result.info.clone(),
-                            )
-                        }
+                        Some(result) => self.select(
+                            result.backend_name(),
+                            result.id.clone(),
+                            result.icon_opt.clone(),
+                            result.info.clone(),
+                        ),
                         None => {
                             log::error!("failed to find installed result with index {}", result_i);
                             Task::none()
@@ -1712,12 +1720,7 @@ impl App {
                         .map(|(backend_name, package)| (backend_name, package.clone()))
                     {
                         Some((backend_name, package)) => {
-                            self.select(
-                                backend_name,
-                                package.id,
-                                Some(package.icon),
-                                package.info,
-                            )
+                            self.select(backend_name, package.id, Some(package.icon), package.info)
                         }
                         None => {
                             log::error!("failed to find updates package with index {}", updates_i);
@@ -1735,14 +1738,12 @@ impl App {
             Message::SelectCategoryResult(result_i) => {
                 if let Some((_, results)) = &self.category_results {
                     match results.get(result_i) {
-                        Some(result) => {
-                            self.select(
-                                result.backend_name(),
-                                result.id.clone(),
-                                result.icon_opt.clone(),
-                                result.info.clone(),
-                            )
-                        }
+                        Some(result) => self.select(
+                            result.backend_name(),
+                            result.id.clone(),
+                            result.icon_opt.clone(),
+                            result.info.clone(),
+                        ),
                         None => {
                             log::error!("failed to find category result with index {}", result_i);
                             Task::none()
@@ -1755,14 +1756,12 @@ impl App {
             Message::SelectExploreResult(explore_page, result_i) => {
                 if let Some(results) = self.explore_results.get(&explore_page) {
                     match results.get(result_i) {
-                        Some(result) => {
-                            self.select(
-                                result.backend_name(),
-                                result.id.clone(),
-                                result.icon_opt.clone(),
-                                result.info.clone(),
-                            )
-                        }
+                        Some(result) => self.select(
+                            result.backend_name(),
+                            result.id.clone(),
+                            result.icon_opt.clone(),
+                            result.info.clone(),
+                        ),
                         None => {
                             log::error!(
                                 "failed to find {:?} result with index {}",
@@ -1779,14 +1778,12 @@ impl App {
             Message::SelectSearchResult(result_i) => {
                 if let Some((_input, results)) = &self.search_results {
                     match results.get(result_i) {
-                        Some(result) => {
-                            self.select(
-                                result.backend_name(),
-                                result.id.clone(),
-                                result.icon_opt.clone(),
-                                result.info.clone(),
-                            )
-                        }
+                        Some(result) => self.select(
+                            result.backend_name(),
+                            result.id.clone(),
+                            result.icon_opt.clone(),
+                            result.info.clone(),
+                        ),
                         None => {
                             log::error!("failed to find search result with index {}", result_i);
                             Task::none()
@@ -1913,8 +1910,8 @@ impl App {
         let start = Instant::now();
         let mut apps = Apps::new();
 
-        let entry_sort = |a: &AppEntry, b: &AppEntry, id: &AppId| {
-            match b.installed.cmp(&a.installed) {
+        let entry_sort =
+            |a: &AppEntry, b: &AppEntry, id: &AppId| match b.installed.cmp(&a.installed) {
                 cmp::Ordering::Equal => {
                     let a_priority = priority(a.backend_name, &a.info.source_id, id);
                     let b_priority = priority(b.backend_name, &b.info.source_id, id);
@@ -1931,8 +1928,7 @@ impl App {
                     }
                 }
                 ordering => ordering,
-            }
-        };
+            };
 
         //TODO: par_iter?
         for (backend_name, backend) in self.backends.iter() {
@@ -2074,31 +2070,6 @@ impl App {
         )
     }
 
-    fn update_notification(&mut self) -> Task<Message> {
-        // Handle closing notification if there are no operations
-        if self.pending_operations.is_empty() {
-            #[cfg(feature = "notify")]
-            if let Some(notification_arc) = self.notification_opt.take() {
-                return Task::perform(
-                    async move {
-                        tokio::task::spawn_blocking(move || {
-                            //TODO: this is nasty
-                            let notification_mutex = Arc::try_unwrap(notification_arc).unwrap();
-                            let notification = notification_mutex.into_inner().unwrap();
-                            notification.close();
-                        })
-                        .await
-                        .unwrap();
-                        action::app(Message::MaybeExit)
-                    },
-                    |x| x,
-                );
-            }
-        }
-
-        Task::none()
-    }
-
     fn handle_appstream_url(&self, input: String, path: &str) -> Task<Message> {
         // Handler for appstream:component-id as described in:
         // https://freedesktop.org/software/appstream/docs/sect-AppStream-Misc-URIHandler.html
@@ -2110,11 +2081,17 @@ impl App {
             async move {
                 tokio::task::spawn_blocking(move || {
                     let start = Instant::now();
-                    let results =
-                        Self::generic_search(&apps, &backends, &os_codename, |id, _info, _installed| {
+                    let results = Self::generic_search(
+                        &apps,
+                        &backends,
+                        &os_codename,
+                        |id, _info, _installed| {
                             //TODO: fuzzy search with lower weight?
                             if id == &component_id { Some(0) } else { None }
-                        }, SearchSortMode::Relevance, WaylandFilter::All);
+                        },
+                        SearchSortMode::Relevance,
+                        WaylandFilter::All,
+                    );
                     let duration = start.elapsed();
                     log::info!(
                         "searched for ID {:?} in {:?}, found {} results",
@@ -2250,15 +2227,21 @@ impl App {
             async move {
                 tokio::task::spawn_blocking(move || {
                     let start = Instant::now();
-                    let results =
-                        Self::generic_search(&apps, &backends, &os_codename, |_id, info, _installed| {
+                    let results = Self::generic_search(
+                        &apps,
+                        &backends,
+                        &os_codename,
+                        |_id, info, _installed| {
                             //TODO: monthly downloads as weight?
                             if info.provides.contains(&provide) {
                                 Some(-(info.monthly_downloads as i64))
                             } else {
                                 None
                             }
-                        }, SearchSortMode::Relevance, WaylandFilter::All);
+                        },
+                        SearchSortMode::Relevance,
+                        WaylandFilter::All,
+                    );
                     let duration = start.elapsed();
                     log::info!(
                         "searched for mime {:?} in {:?}, found {} results",
@@ -2665,8 +2648,9 @@ impl App {
         ])
         .align_x(Alignment::Center)
         .width(Length::Fill);
-        let downloads_widget =
-            (selected.info.source_id == "flathub" && selected.info.monthly_downloads > 0).then(|| {
+        let downloads_widget = (selected.info.source_id == "flathub"
+            && selected.info.monthly_downloads > 0)
+            .then(|| {
                 widget::column::with_children(vec![
                     widget::text::heading(selected.info.monthly_downloads.to_string()).into(),
                     //TODO: description of what this means?
@@ -2768,7 +2752,8 @@ impl App {
         // Add compatibility warning banner if needed (only for Flathub apps)
         if selected.info.source_id == "flathub" {
             if let Some(compat) = selected.info.wayland_compat_lazy() {
-                if compat.risk_level == RiskLevel::Critical || compat.risk_level == RiskLevel::High {
+                if compat.risk_level == RiskLevel::Critical || compat.risk_level == RiskLevel::High
+                {
                     let (title, description, icon_name) =
                         if matches!(compat.support, WaylandSupport::X11Only) {
                             (
@@ -2824,12 +2809,8 @@ impl App {
                 4
             };
             for (addon_id, addon_info) in selected.addons.iter().take(take) {
-                let buttons = self.selected_buttons(
-                    selected.backend_name,
-                    addon_id,
-                    addon_info,
-                    true,
-                );
+                let buttons =
+                    self.selected_buttons(selected.backend_name, addon_id, addon_info, true);
                 list = list.add(
                     widget::settings::item::builder(&addon_info.name)
                         .description(&addon_info.summary)
@@ -3140,18 +3121,20 @@ impl App {
         match &self.updates {
             Some(updates) => {
                 if updates.is_empty() {
-                    column = column.push(widget::text::title2(NavPage::Updates.title())).push(
-                        widget::column::with_capacity(2)
-                            .spacing(space_s)
-                            .padding([space_l, 0])
-                            .width(Length::Fill)
-                            .align_x(Alignment::Center)
-                            .push(widget::text::body(fl!("no-updates")))
-                            .push(
-                                widget::button::standard(fl!("check-for-updates"))
-                                    .on_press(Message::CheckUpdates),
-                            ),
-                    );
+                    column = column
+                        .push(widget::text::title2(NavPage::Updates.title()))
+                        .push(
+                            widget::column::with_capacity(2)
+                                .spacing(space_s)
+                                .padding([space_l, 0])
+                                .width(Length::Fill)
+                                .align_x(Alignment::Center)
+                                .push(widget::text::body(fl!("no-updates")))
+                                .push(
+                                    widget::button::standard(fl!("check-for-updates"))
+                                        .on_press(Message::CheckUpdates),
+                                ),
+                        );
                 } else {
                     column = column.push(widget::flex_row(vec![
                         widget::text::title2(NavPage::Updates.title()).into(),
@@ -3180,8 +3163,10 @@ impl App {
                         let mut controls = Vec::with_capacity(1);
                         let mut top_controls = Vec::with_capacity(1);
                         let mut waiting_refresh = false;
-                        for (other_backend_name, source_id, package_id) in
-                            self.waiting_installed.iter().chain(self.waiting_updates.iter())
+                        for (other_backend_name, source_id, package_id) in self
+                            .waiting_installed
+                            .iter()
+                            .chain(self.waiting_updates.iter())
                         {
                             if other_backend_name == backend_name
                                 && source_id == &package.info.source_id
@@ -3198,7 +3183,10 @@ impl App {
                                     .infos
                                     .iter()
                                     .any(|info| info.source_id == package.info.source_id)
-                                && op.package_ids.iter().any(|package_id| package_id == &package.id)
+                                && op
+                                    .package_ids
+                                    .iter()
+                                    .any(|package_id| package_id == &package.id)
                             {
                                 progress_opt = Some(*progress);
                                 break;
@@ -3252,19 +3240,21 @@ impl App {
                 }
             }
             None => {
-                column = column.push(widget::text::title2(NavPage::Updates.title())).push(
-                    widget::column::with_capacity(2)
-                        .spacing(space_s)
-                        .padding([space_l, 0])
-                        .width(Length::Fill)
-                        .align_x(Alignment::Center)
-                        /*.push(
-                            widget::progress_bar(0.0..=100.0, progress)
-                                .height(Length::Fixed(4.0))
-                                .width(Length::Fixed(446.0)),
-                        )*/
-                        .push(widget::text(fl!("checking-for-updates"))),
-                );
+                column = column
+                    .push(widget::text::title2(NavPage::Updates.title()))
+                    .push(
+                        widget::column::with_capacity(2)
+                            .spacing(space_s)
+                            .padding([space_l, 0])
+                            .width(Length::Fill)
+                            .align_x(Alignment::Center)
+                            /*.push(
+                                widget::progress_bar(0.0..=100.0, progress)
+                                    .height(Length::Fixed(4.0))
+                                    .width(Length::Fixed(446.0)),
+                            )*/
+                            .push(widget::text(fl!("checking-for-updates"))),
+                    );
             }
         }
         column.into()
@@ -3356,8 +3346,8 @@ impl App {
                     //TODO: reduce duplication
                     NavPage::Updates => self.view_updates_page(spacing, grid_width),
                     nav_page => self.view_category_page(nav_page, spacing, grid_width),
-                }
-            }
+                },
+            },
         }
     }
 }
@@ -3577,12 +3567,13 @@ impl Application for App {
             Message::AppTheme(_) | Message::Config(_) | Message::SystemThemeModeChange(_) => {
                 return self.handle_config_message(message);
             }
-            Message::Backends(_) | Message::CheckUpdates | Message::UpdateAll | Message::Updates(_) => {
+            Message::Backends(_)
+            | Message::CheckUpdates
+            | Message::UpdateAll
+            | Message::Updates(_) => {
                 return self.handle_backend_message(message);
             }
-            Message::DialogCancel
-            | Message::DialogConfirm
-            | Message::DialogPage(_) => {
+            Message::DialogCancel | Message::DialogConfirm | Message::DialogPage(_) => {
                 return self.handle_dialog_message(message);
             }
             Message::Operation(_, _, _, _)
@@ -3666,7 +3657,10 @@ impl Application for App {
                                     };
                                     eprintln!(
                                         "{:?} {:?} from backend {} and info {:?}",
-                                        kind, result.id, result.backend_name(), result.info
+                                        kind,
+                                        result.id,
+                                        result.backend_name(),
+                                        result.info
                                     );
                                     ops.push(Operation {
                                         kind,
@@ -4189,14 +4183,14 @@ impl Application for App {
                             },
                         )
                         .width(Length::Fixed(200.0))
-                        .into()
+                        .into(),
                     ]
                 } else {
                     vec![
                         widget::button::icon(widget::icon::from_name("system-search-symbolic"))
                             .on_press(Message::SearchActivate)
                             .padding(8)
-                            .into()
+                            .into(),
                     ]
                 }
             }

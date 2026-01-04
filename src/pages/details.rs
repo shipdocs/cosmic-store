@@ -3,7 +3,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use cosmic::cosmic_theme::Spacing;
 use cosmic::iced::{Alignment, Length};
 use cosmic::{Element, Task, cosmic_theme, theme, widget};
 
@@ -422,7 +421,7 @@ impl DetailsPage {
     }
 
     pub fn update(&mut self, message: &Message) -> Task<cosmic::Action<Message>> {
-        use cosmic::action;
+        
         match message {
             Message::SelectedAddonsViewMore(v) => {
                 self.addons_view_more = *v;

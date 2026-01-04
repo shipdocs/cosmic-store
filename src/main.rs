@@ -4,7 +4,7 @@
 use clap::Parser;
 
 mod constants;
-use constants::{ICON_SIZE_DETAILS, MAX_GRID_WIDTH, MAX_RESULTS};
+use constants::{MAX_GRID_WIDTH, MAX_RESULTS};
 
 mod utils;
 
@@ -16,7 +16,7 @@ use pages::{ContextPage, DialogPage, ExplorePage, NavPage};
 use pages::{DetailsPage, DetailsPageActions, SelectedSource};
 
 mod ui;
-use ui::{GridMetrics, package_card_view, styled_icon, wayland_compat_badge};
+use ui::{GridMetrics, package_card_view};
 
 use cosmic::{
     Application, ApplicationExt, Element, action,
@@ -56,7 +56,7 @@ use app_id::AppId;
 mod app_id;
 
 use app_info::{
-    AppFramework, AppIcon, AppInfo, AppKind, AppProvide, AppUrl, RiskLevel, WaylandSupport,
+    AppIcon, AppInfo, AppKind, AppProvide, AppUrl,
 };
 mod app_info;
 

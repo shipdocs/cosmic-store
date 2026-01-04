@@ -1,11 +1,23 @@
 use std::{collections::HashMap, sync::OnceLock, time::Instant};
 
-use crate::app_info::WaylandCompatibility;
 use crate::AppId;
+use crate::app_info::WaylandCompatibility;
 
-const STATS_URL: &str =
-    "https://github.com/shipdocs/cosmic-store/releases/latest/download/flathub-stats.bitcode-v0-7";
-const STATS_CACHE_PATH: &str = "cosmic-store/flathub-stats.bitcode-v0-7";
+use crate::constants::FLATHUB_STATS_VERSION;
+
+fn stats_url() -> String {
+    format!(
+        "https://github.com/shipdocs/cosmic-store/releases/latest/download/flathub-stats.bitcode-{}",
+        FLATHUB_STATS_VERSION
+    )
+}
+
+fn stats_cache_path() -> String {
+    format!(
+        "cosmic-store/flathub-stats.bitcode-{}",
+        FLATHUB_STATS_VERSION
+    )
+}
 const CACHE_MAX_AGE_SECS: u64 = 30 * 24 * 60 * 60; // 30 days
 
 #[derive(bitcode::Decode)]
@@ -22,7 +34,7 @@ struct FlathubStats {
 static STATS: OnceLock<FlathubStats> = OnceLock::new();
 
 fn get_cache_path() -> Option<std::path::PathBuf> {
-    Some(dirs::cache_dir()?.join(STATS_CACHE_PATH))
+    Some(dirs::cache_dir()?.join(stats_cache_path()))
 }
 
 fn try_load_cached() -> Option<Vec<u8>> {
@@ -33,16 +45,25 @@ fn try_load_cached() -> Option<Vec<u8>> {
 }
 
 fn is_cache_stale() -> bool {
-    let Some(cache_path) = get_cache_path() else { return true };
-    let Ok(metadata) = std::fs::metadata(&cache_path) else { return true };
-    let Ok(modified) = metadata.modified() else { return true };
-    let Ok(elapsed) = modified.elapsed() else { return true };
+    let Some(cache_path) = get_cache_path() else {
+        return true;
+    };
+    let Ok(metadata) = std::fs::metadata(&cache_path) else {
+        return true;
+    };
+    let Ok(modified) = metadata.modified() else {
+        return true;
+    };
+    let Ok(elapsed) = modified.elapsed() else {
+        return true;
+    };
     elapsed.as_secs() >= CACHE_MAX_AGE_SECS
 }
 
 fn download_and_cache() -> Option<Vec<u8>> {
-    log::info!("downloading flathub statistics from {}", STATS_URL);
-    let response = reqwest::blocking::get(STATS_URL).ok()?;
+    let url = stats_url();
+    log::info!("downloading flathub statistics from {}", url);
+    let response = reqwest::blocking::get(url).ok()?;
     if !response.status().is_success() {
         log::warn!("failed to download stats: {}", response.status());
         return None;
@@ -70,7 +91,8 @@ fn decode_v7(data: &[u8]) -> Option<FlathubStats> {
 
 #[cfg(feature = "flathub-stats-v7")]
 fn try_load_bundled() -> Option<Vec<u8>> {
-    let bundled_path = std::path::Path::new("res/flathub-stats.bitcode-v0-7");
+    let bundled_path = std::path::Path::new("res")
+        .join(format!("flathub-stats.bitcode-{}", FLATHUB_STATS_VERSION));
     let data = std::fs::read(bundled_path).ok()?;
     log::info!("loaded bundled flathub statistics");
     Some(data)
@@ -82,7 +104,7 @@ fn load_stats() -> &'static FlathubStats {
 
         #[cfg(feature = "flathub-stats-v7")]
         {
-    // 1. Try cache first (fastest).
+            // 1. Try cache first (fastest).
             if let Some(data) = try_load_cached() {
                 if let Some(stats) = decode_v7(&data) {
                     log::info!("stats ready in {:?}", start.elapsed());
@@ -151,7 +173,3 @@ pub fn load_stats_async() {
         }
     });
 }
-
-
-
-

@@ -3,7 +3,7 @@ use crate::app_info::AppProvide;
 use crate::backend::Backends;
 use crate::gstreamer::GStreamerCodec;
 use crate::search::{SearchResult, SearchSortMode, WaylandFilter};
-use crate::{App, Apps, Message};
+use crate::{Apps, Message};
 use cosmic::action;
 use cosmic::app::Task;
 use std::sync::Arc;
@@ -26,7 +26,7 @@ pub fn handle_appstream_url(
         async move {
             tokio::task::spawn_blocking(move || {
                 let start = Instant::now();
-                let results = App::generic_search(
+                let results = crate::search_logic::generic_search(
                     &apps,
                     &backends,
                     &os_codename,
@@ -178,7 +178,7 @@ pub fn handle_mime_url(
         async move {
             tokio::task::spawn_blocking(move || {
                 let start = Instant::now();
-                let results = App::generic_search(
+                let results = crate::search_logic::generic_search(
                     &apps,
                     &backends,
                     &os_codename,

@@ -1,16 +1,29 @@
 use std::{collections::HashMap, error::Error, fs};
 
-use chrono::{Datelike, Duration, Utc};
 use app_id::AppId;
+use chrono::{Datelike, Duration, Utc};
 #[path = "../../src/app_id.rs"]
 mod app_id;
+
+#[path = "../../src/constants.rs"]
+mod constants;
 
 #[derive(serde::Deserialize)]
 pub struct Stats {
     refs: HashMap<String, HashMap<String, (u64, u64)>>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, bitcode::Encode, bitcode::Decode)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    serde::Serialize,
+    serde::Deserialize,
+    bitcode::Encode,
+    bitcode::Decode,
+)]
 pub enum WaylandSupport {
     Native,
     Fallback,
@@ -18,7 +31,17 @@ pub enum WaylandSupport {
     Unknown,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, bitcode::Encode, bitcode::Decode)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    serde::Serialize,
+    serde::Deserialize,
+    bitcode::Encode,
+    bitcode::Decode,
+)]
 pub enum AppFramework {
     Native,
     GTK3,
@@ -30,7 +53,17 @@ pub enum AppFramework {
     Unknown,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, bitcode::Encode, bitcode::Decode)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    serde::Serialize,
+    serde::Deserialize,
+    bitcode::Encode,
+    bitcode::Decode,
+)]
 pub enum RiskLevel {
     Low,
     Medium,
@@ -215,13 +248,24 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 }
             }
             Err(e) => {
-                eprintln!("Warning: Failed to fetch stats for {}/{}/{}: {}", year, month, day, e);
+                eprintln!(
+                    "Warning: Failed to fetch stats for {}/{}/{}: {}",
+                    year, month, day, e
+                );
             }
         }
     }
-    println!("Fetched stats for {} unique apps ({}/{} days)", ref_downloads.len(), days_fetched, days);
+    println!(
+        "Fetched stats for {} unique apps ({}/{} days)",
+        ref_downloads.len(),
+        days_fetched,
+        days
+    );
 
-    println!("Fetching compatibility data for {} apps...", ref_downloads.len());
+    println!(
+        "Fetching compatibility data for {} apps...",
+        ref_downloads.len()
+    );
     let mut compatibility_data = HashMap::<AppId, WaylandCompatibility>::new();
 
     let mut successful = 0;
@@ -248,7 +292,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
     }
 
-    println!("Successfully fetched {} manifests, {} failed", successful, failed);
+    println!(
+        "Successfully fetched {} manifests, {} failed",
+        successful, failed
+    );
 
     let stats = FlathubStats {
         downloads: ref_downloads,
@@ -257,11 +304,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let bitcode = bitcode::encode(&stats);
 
+    use constants::FLATHUB_STATS_VERSION;
+
     // Ensure res directory exists
     fs::create_dir_all("../res")?;
-    fs::write("../res/flathub-stats.bitcode-v0-7", &bitcode)?;
+    let path = format!("../res/flathub-stats.bitcode-{}", FLATHUB_STATS_VERSION);
+    fs::write(&path, &bitcode)?;
 
-    println!("Saved to ../res/flathub-stats.bitcode-v0-7");
+    println!("Saved to {}", path);
 
     Ok(())
 }

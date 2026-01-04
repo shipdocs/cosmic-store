@@ -14,3 +14,6 @@ pub const MAX_GRID_WIDTH: f32 = 1600.0;
 
 /// Maximum number of search results to display
 pub const MAX_RESULTS: usize = 100;
+
+/// Current version of the Flathub stats data format
+pub const FLATHUB_STATS_VERSION: &str = "v0-7";

@@ -24,6 +24,8 @@ use std::{
 
 use crate::{AppIcon, AppId, AppInfo, app_info::WaylandCompatibility, stats};
 
+type ParsedData = (Option<String>, Vec<(AppId, Arc<AppInfo>)>, Vec<Component>);
+
 /// Extract Wayland compatibility bitcode from AppStream XML custom fields.
 ///
 /// This function looks for a custom value with key "wayland_compat" in XML
@@ -406,7 +408,7 @@ impl AppstreamCache {
         let path_results: Vec<_> = self
             .path_tags
             .par_iter()
-            .filter_map(|(path, _tag)| {
+            .filter_map(|(path, _tag)| -> Option<ParsedData> {
                 let file_name = match Path::new(path).file_name() {
                     Some(file_name_os) => match file_name_os.to_str() {
                         Some(some) => some,
@@ -699,7 +701,7 @@ impl AppstreamCache {
         &self,
         path: P,
         reader: R,
-    ) -> Result<(Option<String>, Vec<(AppId, Arc<AppInfo>)>, Vec<Component>), Box<dyn Error>> {
+    ) -> Result<ParsedData, Box<dyn Error>> {
         let start = Instant::now();
         let path = path.as_ref();
         //TODO: just running this and not saving the results makes a huge memory leak!
@@ -793,7 +795,7 @@ impl AppstreamCache {
         &self,
         path: P,
         reader: R,
-    ) -> Result<(Option<String>, Vec<(AppId, Arc<AppInfo>)>, Vec<Component>), Box<dyn Error>> {
+    ) -> Result<ParsedData, Box<dyn Error>> {
         let start = Instant::now();
         let path = path.as_ref();
         let mut origin_opt = None;
@@ -973,22 +975,30 @@ impl AppstreamCache {
                                     Some("mediatypes") => match provide.as_sequence() {
                                         Some(sequence) => {
                                             for mediatype in sequence {
-                                                match mediatype.as_str() {
-                                                    Some(mediatype) => {
-                                                        component.provides.push(
-                                                            Provide::MediaType(
-                                                                mediatype.to_string(),
-                                                            ),
-                                                        );
+                                                if let Some(mediatype) = mediatype.as_str() {
+                                                    component.provides.push(Provide::MediaType(
+                                                        mediatype.to_string(),
+                                                    ));
+                                                } else if let Some(sequence) =
+                                                    mediatype.as_sequence()
+                                                {
+                                                    for mediatype in sequence {
+                                                        if let Some(mediatype) = mediatype.as_str()
+                                                        {
+                                                            component.provides.push(
+                                                                Provide::MediaType(
+                                                                    mediatype.to_string(),
+                                                                ),
+                                                            );
+                                                        }
                                                     }
-                                                    None => {
-                                                        log::warn!(
-                                                            "unsupported mediatypes provide {:?} for {:?} in {:?}",
-                                                            mediatype,
-                                                            component.id,
-                                                            path
-                                                        );
-                                                    }
+                                                } else {
+                                                    log::warn!(
+                                                        "unsupported mediatypes provide {:?} for {:?} in {:?}",
+                                                        mediatype,
+                                                        component.id,
+                                                        path
+                                                    );
                                                 }
                                             }
                                         }
@@ -999,9 +1009,90 @@ impl AppstreamCache {
                                             );
                                         }
                                     },
+                                    // Treat mimetypes same as mediatypes (legacy key)
+                                    Some("mimetypes") => match provide.as_sequence() {
+                                        Some(sequence) => {
+                                            for mediatype in sequence {
+                                                if let Some(mediatype) = mediatype.as_str() {
+                                                    component.provides.push(Provide::MediaType(
+                                                        mediatype.to_string(),
+                                                    ));
+                                                } else if let Some(sequence) =
+                                                    mediatype.as_sequence()
+                                                {
+                                                    for mediatype in sequence {
+                                                        if let Some(mediatype) = mediatype.as_str()
+                                                        {
+                                                            component.provides.push(
+                                                                Provide::MediaType(
+                                                                    mediatype.to_string(),
+                                                                ),
+                                                            );
+                                                        }
+                                                    }
+                                                } else {
+                                                    log::warn!(
+                                                        "unsupported mimetypes provide {:?} for {:?} in {:?}",
+                                                        mediatype,
+                                                        component.id,
+                                                        path
+                                                    );
+                                                }
+                                            }
+                                        }
+                                        None => {
+                                            log::warn!(
+                                                "mimetypes provide value is not a sequence in {:?}",
+                                                path
+                                            );
+                                        }
+                                    },
+                                    Some("binaries") => match provide.as_sequence() {
+                                        Some(sequence) => {
+                                            for binary in sequence {
+                                                if let Some(binary) = binary.as_str() {
+                                                    component
+                                                        .provides
+                                                        .push(Provide::Binary(binary.to_string()));
+                                                } else if let Some(sequence) = binary.as_sequence()
+                                                {
+                                                    for binary in sequence {
+                                                        if let Some(binary) = binary.as_str() {
+                                                            component.provides.push(
+                                                                Provide::Binary(binary.to_string()),
+                                                            );
+                                                        }
+                                                    }
+                                                } else {
+                                                    log::warn!(
+                                                        "unsupported binaries provide {:?} for {:?} in {:?}",
+                                                        binary,
+                                                        component.id,
+                                                        path
+                                                    );
+                                                }
+                                            }
+                                        }
+                                        None => {
+                                            log::warn!(
+                                                "binaries provide value is not a sequence in {:?}",
+                                                path
+                                            );
+                                        }
+                                    },
+                                    Some("python3") => {
+                                        // Ignore python3 provides for now
+                                        log::debug!(
+                                            "ignoring {:?} provide for {:?} in {:?}",
+                                            key,
+                                            component.id,
+                                            path
+                                        );
+                                    }
                                     _ => {
                                         log::warn!(
-                                            "unsupported mediatypes provide {:?} for {:?} in {:?}",
+                                            "unsupported provide key {:?} value {:?} for {:?} in {:?}",
+                                            key,
                                             provide,
                                             component.id,
                                             path
@@ -1160,6 +1251,7 @@ impl AppstreamCache {
                                     Some("faq") => ProjectUrl::Faq(url),
                                     Some("help") => ProjectUrl::Help(url),
                                     Some("homepage") => ProjectUrl::Homepage(url),
+                                    Some("translate") => ProjectUrl::Translate(url),
                                     //TODO: add to appstream crate: Some("vcs-browser") => ProjectUrl::VcsBrowser(url),
                                     _ => {
                                         log::warn!(
@@ -1520,6 +1612,48 @@ mod wayland_bitcode_tests {
                     assert_eq!(
                         compat.risk_level,
                         RiskLevel::Medium,
+                        "Wrong risk level for {}",
+                        id_str
+                    );
+                }
+                "com.visualstudio.code" => {
+                    // Electron + Native + High
+                    assert_eq!(
+                        compat.framework,
+                        AppFramework::Electron,
+                        "Wrong framework for {}",
+                        id_str
+                    );
+                    assert_eq!(
+                        compat.support,
+                        WaylandSupport::Native,
+                        "Wrong support for {}",
+                        id_str
+                    );
+                    assert_eq!(
+                        compat.risk_level,
+                        RiskLevel::High,
+                        "Wrong risk level for {}",
+                        id_str
+                    );
+                }
+                "com.discordapp.Discord" => {
+                    // Electron + Native + High (Mock data values)
+                    assert_eq!(
+                        compat.framework,
+                        AppFramework::Electron,
+                        "Wrong framework for {}",
+                        id_str
+                    );
+                    assert_eq!(
+                        compat.support,
+                        WaylandSupport::Native,
+                        "Wrong support for {}",
+                        id_str
+                    );
+                    assert_eq!(
+                        compat.risk_level,
+                        RiskLevel::High,
                         "Wrong risk level for {}",
                         id_str
                     );

@@ -1,7 +1,10 @@
 //! Page-related enums for navigation and dialogs
 
-use crate::app_id::AppId;
+pub mod details;
+pub use details::{DetailsPage, DetailsPageActions, SelectedSource};
+
 use crate::Category;
+use crate::app_id::AppId;
 use crate::operation::RepositoryRemoveError;
 use std::sync::Arc;
 

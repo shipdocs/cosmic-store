@@ -13,6 +13,7 @@ use search::{SearchResult, SearchSortMode, WaylandFilter};
 
 mod pages;
 use pages::{ContextPage, DialogPage, ExplorePage, NavPage};
+use pages::{DetailsPage, DetailsPageActions, SelectedSource};
 
 mod ui;
 use ui::{GridMetrics, package_card_view, styled_icon, wayland_compat_badge};
@@ -407,60 +408,19 @@ pub enum ScrollContext {
     NavPage,
     ExplorePage,
     SearchResults,
-    Selected,
+    DetailsPage,
 }
 
 impl ScrollContext {
     fn unused_contexts(&self) -> &'static [ScrollContext] {
         // Contexts that can be safely removed when another is active
         match self {
-            Self::NavPage => &[Self::Selected, Self::SearchResults, Self::ExplorePage],
-            Self::ExplorePage => &[Self::Selected, Self::SearchResults],
-            Self::SearchResults => &[Self::Selected],
-            Self::Selected => &[],
+            Self::NavPage => &[Self::DetailsPage, Self::SearchResults, Self::ExplorePage],
+            Self::ExplorePage => &[Self::DetailsPage, Self::SearchResults],
+            Self::SearchResults => &[Self::DetailsPage],
+            Self::DetailsPage => &[],
         }
     }
-}
-
-#[derive(Clone, Debug)]
-pub struct SelectedSource {
-    backend_name: &'static str,
-    source_id: String,
-    source_name: String,
-}
-
-impl SelectedSource {
-    fn new(backend_name: &'static str, info: &AppInfo, installed: bool) -> Self {
-        SelectedSource {
-            backend_name,
-            source_id: info.source_id.clone(),
-            source_name: if installed {
-                fl!("source-installed", source = info.source_name.as_str())
-            } else {
-                info.source_name.clone()
-            },
-        }
-    }
-}
-
-// For use in dropdown widget
-impl AsRef<str> for SelectedSource {
-    fn as_ref(&self) -> &str {
-        &self.source_name
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct Selected {
-    backend_name: &'static str,
-    id: AppId,
-    icon_opt: Option<widget::icon::Handle>,
-    info: Arc<AppInfo>,
-    screenshot_images: HashMap<usize, widget::image::Handle>,
-    screenshot_shown: usize,
-    sources: Vec<SelectedSource>,
-    addons: Vec<(AppId, Arc<AppInfo>)>,
-    addons_view_more: bool,
 }
 
 /// The [`App`] stores application-specific state.
@@ -509,9 +469,21 @@ pub struct App {
     explore_results: HashMap<ExplorePage, Vec<SearchResult>>,
     installed_results: Option<Vec<SearchResult>>,
     search_results: Option<(String, Vec<SearchResult>)>,
-    selected_opt: Option<Selected>,
+    details_page_opt: Option<DetailsPage>,
     applet_placement_buttons: cosmic::widget::segmented_button::SingleSelectModel,
     uninstall_purge_data: bool,
+}
+
+impl DetailsPageActions for App {
+    fn selected_buttons<'a>(
+        &'a self,
+        backend_name: &'static str,
+        id: &AppId,
+        info: &Arc<AppInfo>,
+        addon: bool,
+    ) -> Vec<Element<'a, Message>> {
+        self.selected_buttons_impl(backend_name, id, info, addon)
+    }
 }
 
 impl App {
@@ -1117,7 +1089,7 @@ impl App {
         )
     }
 
-    fn selected_buttons(
+    fn selected_buttons_impl(
         &self,
         selected_backend_name: &'static str,
         selected_id: &AppId,
@@ -1311,23 +1283,20 @@ impl App {
         );
         let sources = self.selected_sources(backend_name, &id, &info);
         let addons = self.selected_addons(backend_name, &id, &info);
-        self.selected_opt = Some(Selected {
+        self.details_page_opt = Some(DetailsPage::new(
             backend_name,
             id,
             icon_opt,
             info,
-            screenshot_images: HashMap::new(),
-            screenshot_shown: 0,
             sources,
             addons,
-            addons_view_more: false,
-        });
+        ));
         self.update_scroll()
     }
 
     fn scroll_context(&self) -> ScrollContext {
-        if self.selected_opt.is_some() {
-            ScrollContext::Selected
+        if self.details_page_opt.is_some() {
+            ScrollContext::DetailsPage
         } else if self.search_results.is_some() {
             ScrollContext::SearchResults
         } else if self.explore_page_opt.is_some() {
@@ -1462,7 +1431,7 @@ impl App {
             }
             Message::SearchResults(input, results, auto_select) => {
                 if input == self.search_input {
-                    self.selected_opt = None;
+                    self.details_page_opt = None;
                     if auto_select && results.len() == 1 {
                         let _ = self.select(
                             results[0].backend_name(),
@@ -1750,7 +1719,7 @@ impl App {
                 }
             }
             Message::SelectNone => {
-                self.selected_opt = None;
+                self.details_page_opt = None;
                 self.update_scroll()
             }
             Message::SelectCategoryResult(result_i) => {
@@ -1811,33 +1780,19 @@ impl App {
                     Task::none()
                 }
             }
-            Message::SelectedAddonsViewMore(addons_view_more) => {
-                if let Some(selected) = &mut self.selected_opt {
-                    selected.addons_view_more = addons_view_more;
+            Message::SelectedAddonsViewMore(_)
+            | Message::SelectedScreenshot(_, _, _)
+            | Message::SelectedScreenshotShown(_) => {
+                if let Some(details_page) = &mut self.details_page_opt {
+                    details_page.update(&message)
+                } else {
+                    Task::none()
                 }
-                Task::none()
             }
-            Message::SelectedScreenshot(i, url, data) => {
-                if let Some(selected) = &mut self.selected_opt {
-                    if let Some(screenshot) = selected.info.screenshots.get(i) {
-                        if screenshot.url == url {
-                            selected
-                                .screenshot_images
-                                .insert(i, widget::image::Handle::from_bytes(data));
-                        }
-                    }
-                }
-                Task::none()
-            }
-            Message::SelectedScreenshotShown(i) => {
-                if let Some(selected) = &mut self.selected_opt {
-                    selected.screenshot_shown = i;
-                }
-                Task::none()
-            }
+
             Message::SelectedSource(i) => {
                 let mut next_ids = None;
-                if let Some(selected) = &self.selected_opt {
+                if let Some(selected) = &self.details_page_opt {
                     if let Some(source) = selected.sources.get(i) {
                         next_ids = Some((
                             source.backend_name,
@@ -1982,11 +1937,11 @@ impl App {
 
         // Update selected sources
         {
-            let sources_opt = self.selected_opt.as_ref().map(|selected| {
+            let sources_opt = self.details_page_opt.as_ref().map(|selected| {
                 self.selected_sources(selected.backend_name, &selected.id, &selected.info)
             });
             if let Some(sources) = sources_opt {
-                if let Some(selected) = &mut self.selected_opt {
+                if let Some(selected) = &mut self.details_page_opt {
                     selected.sources = sources;
                 }
             }
@@ -2386,364 +2341,6 @@ impl App {
         .spacing(theme::spacing().space_xxs);
 
         widget::settings::view_column(vec![recommended.into(), custom.into()]).into()
-    }
-
-    fn view_selected_app<'a>(
-        &'a self,
-        selected: &'a Selected,
-        spacing: cosmic_theme::Spacing,
-        grid_width: usize,
-    ) -> Element<'a, Message> {
-        let cosmic_theme::Spacing {
-            space_l: _,
-            space_m,
-            space_s,
-            space_xs,
-            space_xxs,
-            space_xxxs,
-            ..
-        } = spacing;
-
-        let mut selected_source = None;
-        for (i, source) in selected.sources.iter().enumerate() {
-            if source.backend_name == selected.backend_name
-                && source.source_id == selected.info.source_id
-            {
-                selected_source = Some(i);
-                break;
-            }
-        }
-
-        let mut column = widget::column::with_capacity(2)
-            .padding([0, space_s, space_m, space_s])
-            .spacing(space_m)
-            .width(Length::Fill);
-        column = column.push(
-            //TODO: describe where we are going back to
-            widget::button::text(fl!("back"))
-                .leading_icon(icon_cache_handle("go-previous-symbolic", 16))
-                .on_press(Message::SelectNone),
-        );
-
-        let buttons =
-            self.selected_buttons(selected.backend_name, &selected.id, &selected.info, false);
-
-        let mut title_row_children = vec![widget::text::title2(&selected.info.name).into()];
-        // Only show Wayland compatibility badge for Flathub apps
-        if selected.info.source_id == "flathub" {
-            if let Some(badge) = wayland_compat_badge(&selected.info, 24) {
-                title_row_children
-                    .push(widget::Space::with_width(Length::Fixed(space_xs.into())).into());
-                title_row_children.push(badge);
-            }
-        }
-
-        column = column.push(
-            widget::row::with_children(vec![
-                match &selected.icon_opt {
-                    Some(icon) => styled_icon(icon.clone(), ICON_SIZE_DETAILS),
-                    None => {
-                        widget::Space::with_width(Length::Fixed(ICON_SIZE_DETAILS as f32)).into()
-                    }
-                },
-                widget::column::with_children(vec![
-                    widget::row::with_children(title_row_children)
-                        .align_y(Alignment::Center)
-                        .into(),
-                    widget::text(&selected.info.summary).into(),
-                    widget::Space::with_height(Length::Fixed(space_s.into())).into(),
-                    widget::row::with_children(buttons).spacing(space_xs).into(),
-                ])
-                .into(),
-            ])
-            .align_y(Alignment::Center)
-            .spacing(space_m),
-        );
-
-        let sources_widget = widget::column::with_children(vec![if selected.sources.len() == 1 {
-            widget::text(selected.sources[0].as_ref()).into()
-        } else {
-            widget::dropdown(&selected.sources, selected_source, Message::SelectedSource).into()
-        }])
-        .align_x(Alignment::Center)
-        .width(Length::Fill);
-        let developers_widget = widget::column::with_children(vec![
-            if selected.info.developer_name.is_empty() {
-                widget::text::heading(fl!("app-developers", app = selected.info.name.as_str()))
-                    .into()
-            } else {
-                widget::text::heading(&selected.info.developer_name).into()
-            },
-            widget::text::body(fl!("developer")).into(),
-        ])
-        .align_x(Alignment::Center)
-        .width(Length::Fill);
-        let downloads_widget = (selected.info.source_id == "flathub"
-            && selected.info.monthly_downloads > 0)
-            .then(|| {
-                widget::column::with_children(vec![
-                    widget::text::heading(selected.info.monthly_downloads.to_string()).into(),
-                    //TODO: description of what this means?
-                    widget::text::body(fl!("monthly-downloads")).into(),
-                ])
-                .align_x(Alignment::Center)
-                .width(Length::Fill)
-            });
-        if grid_width < 416 {
-            let size = 4 + if downloads_widget.is_some() { 3 } else { 0 };
-            let downloads_widget_space = downloads_widget
-                .is_some()
-                .then(widget::divider::horizontal::default);
-            column = column.push(
-                widget::column::with_capacity(size)
-                    .push(widget::divider::horizontal::default())
-                    .push(sources_widget)
-                    .push(widget::divider::horizontal::default())
-                    .push(developers_widget)
-                    .push(widget::divider::horizontal::default())
-                    .push_maybe(downloads_widget)
-                    .push_maybe(downloads_widget_space)
-                    .spacing(space_xxs),
-            );
-        } else {
-            let row_size = 4 + if downloads_widget.is_some() { 2 } else { 0 };
-            let downloads_widget_space = downloads_widget
-                .is_some()
-                .then(|| widget::divider::vertical::default().height(Length::Fixed(32.0)));
-            column = column.push(
-                widget::column::with_children(vec![
-                    widget::divider::horizontal::default().into(),
-                    widget::row::with_capacity(row_size)
-                        .push(sources_widget)
-                        .push(widget::divider::vertical::default().height(Length::Fixed(32.0)))
-                        .push(developers_widget)
-                        .push_maybe(downloads_widget_space)
-                        .push_maybe(downloads_widget)
-                        .align_y(Alignment::Center)
-                        .into(),
-                    widget::divider::horizontal::default().into(),
-                ])
-                .spacing(space_xxs),
-            );
-        }
-        //TODO: proper image scroller
-        if let Some(screenshot) = selected.info.screenshots.get(selected.screenshot_shown) {
-            let image_height = Length::Fixed(320.0);
-            let mut row = widget::row::with_capacity(3).align_y(Alignment::Center);
-            {
-                let mut button =
-                    widget::button::icon(widget::icon::from_name("go-previous-symbolic").size(16));
-                let index = selected.screenshot_shown.checked_sub(1).unwrap_or_else(|| {
-                    selected
-                        .info
-                        .screenshots
-                        .len()
-                        .checked_sub(1)
-                        .unwrap_or_default()
-                });
-                if index != selected.screenshot_shown {
-                    button = button.on_press(Message::SelectedScreenshotShown(index));
-                }
-                row = row.push(button);
-            }
-            let image_element =
-                if let Some(image) = selected.screenshot_images.get(&selected.screenshot_shown) {
-                    widget::container(widget::image(image.clone()))
-                        .center_x(Length::Fill)
-                        .center_y(image_height)
-                        .into()
-                } else {
-                    widget::Space::new(Length::Fill, image_height).into()
-                };
-            row = row.push(
-                widget::column::with_children(vec![
-                    image_element,
-                    widget::text::caption(&screenshot.caption).into(),
-                ])
-                .align_x(Alignment::Center),
-            );
-            {
-                let mut button =
-                    widget::button::icon(widget::icon::from_name("go-next-symbolic").size(16));
-                let index = if selected.screenshot_shown + 1 == selected.info.screenshots.len() {
-                    0
-                } else {
-                    selected.screenshot_shown + 1
-                };
-                if index != selected.screenshot_shown {
-                    button = button.on_press(Message::SelectedScreenshotShown(index));
-                }
-                row = row.push(button);
-            }
-            column = column.push(row);
-        }
-        column = column.push(widget::text::body(&selected.info.description));
-
-        // Add compatibility warning banner if needed (only for Flathub apps)
-        if selected.info.source_id == "flathub" {
-            if let Some(compat) = selected.info.wayland_compat_lazy() {
-                if compat.risk_level == RiskLevel::Critical || compat.risk_level == RiskLevel::High
-                {
-                    let (title, description, icon_name) =
-                        if matches!(compat.support, WaylandSupport::X11Only) {
-                            (
-                                fl!("compatibility-warning"),
-                                fl!("x11-only-description"),
-                                "dialog-warning-symbolic",
-                            )
-                        } else {
-                            let framework_name = match compat.framework {
-                                AppFramework::QtWebEngine => fl!("framework-qtwebengine"),
-                                AppFramework::Electron => fl!("framework-electron"),
-                                _ => fl!("wayland-issues-warning"),
-                            };
-                            (
-                                fl!("wayland-issues-warning"),
-                                fl!("wayland-issues-description", framework = framework_name),
-                                "dialog-warning-symbolic",
-                            )
-                        };
-
-                    let warning_container = widget::container(
-                        widget::column::with_children(vec![
-                            widget::row::with_children(vec![
-                                widget::icon::from_name(icon_name).size(24).into(),
-                                widget::text::heading(title).width(Length::Fill).into(),
-                            ])
-                            .spacing(space_s)
-                            .into(),
-                            widget::text::body(description).into(),
-                        ])
-                        .spacing(space_xxs),
-                    )
-                    .padding(space_s)
-                    .class(theme::Container::Card);
-
-                    column = column.push(warning_container);
-                    column = column.push(widget::Space::with_height(Length::Fixed(space_s.into())));
-                }
-            }
-        }
-
-        if !selected.addons.is_empty() {
-            let mut addon_col = widget::column::with_capacity(2).spacing(space_xxxs);
-            addon_col = addon_col.push(widget::text::title4(fl!("addons")));
-            let mut list = widget::list_column()
-                .divider_padding(0)
-                .list_item_padding([space_xxs, 0])
-                .style(theme::Container::Transparent);
-            let addon_cnt = selected.addons.len();
-            let take = if selected.addons_view_more {
-                addon_cnt
-            } else {
-                4
-            };
-            for (addon_id, addon_info) in selected.addons.iter().take(take) {
-                let buttons =
-                    self.selected_buttons(selected.backend_name, addon_id, addon_info, true);
-                list = list.add(
-                    widget::settings::item::builder(&addon_info.name)
-                        .description(&addon_info.summary)
-                        .control(widget::row::with_children(buttons).spacing(space_xs)),
-                );
-            }
-            if addon_cnt > 4 && !selected.addons_view_more {
-                list = list.add(
-                    widget::button::text(fl!("view-more"))
-                        .on_press(Message::SelectedAddonsViewMore(true)),
-                );
-            }
-            addon_col = addon_col.push(list);
-            column = column.push(addon_col);
-        }
-
-        if let Some(release) = selected.info.releases.first() {
-            let mut release_col = widget::column::with_capacity(2).spacing(space_xxxs);
-            release_col = release_col.push(widget::text::title4(fl!(
-                "version",
-                version = release.version.as_str()
-            )));
-            if let Some(timestamp) = release.timestamp {
-                if let Some(utc) = chrono::DateTime::<chrono::Utc>::from_timestamp(timestamp, 0) {
-                    let local = chrono::DateTime::<chrono::Local>::from(utc);
-                    release_col = release_col.push(widget::text::body(format!(
-                        "{}",
-                        local.format("%b %-d, %-Y")
-                    )));
-                }
-            }
-            if let Some(description) = &release.description {
-                release_col = release_col.push(widget::text::body(description));
-            }
-            column = column.push(release_col);
-            //TODO: show more releases, or make sure this is the latest?
-        }
-
-        if let Some(license) = &selected.info.license_opt {
-            let mut license_col = widget::column::with_capacity(2).spacing(space_xxxs);
-            license_col = license_col.push(widget::text::title4(fl!("licenses")));
-            match spdx::Expression::parse_mode(license, spdx::ParseMode::LAX) {
-                Ok(expr) => {
-                    for item in expr.requirements() {
-                        match &item.req.license {
-                            spdx::LicenseItem::Spdx { id, .. } => {
-                                license_col = license_col.push(widget::text::body(id.full_name));
-                            }
-                            spdx::LicenseItem::Other { lic_ref, .. } => {
-                                let mut parts = lic_ref.splitn(2, '=');
-                                parts.next();
-                                if let Some(url) = parts.next() {
-                                    license_col = license_col.push(
-                                        widget::button::link(fl!("proprietary"))
-                                            .on_press(Message::LaunchUrl(url.to_string()))
-                                            .padding(0),
-                                    )
-                                } else {
-                                    license_col =
-                                        license_col.push(widget::text::body(fl!("proprietary")));
-                                }
-                            }
-                        }
-                    }
-                }
-                Err(_) => {
-                    license_col = license_col.push(widget::text::body(license));
-                }
-            }
-            column = column.push(license_col);
-        }
-
-        if !selected.info.urls.is_empty() {
-            let mut url_items = Vec::with_capacity(selected.info.urls.len());
-            for app_url in &selected.info.urls {
-                let (name, url) = match app_url {
-                    AppUrl::BugTracker(url) => (fl!("bug-tracker"), url),
-                    AppUrl::Contact(url) => (fl!("contact"), url),
-                    AppUrl::Donation(url) => (fl!("donation"), url),
-                    AppUrl::Faq(url) => (fl!("faq"), url),
-                    AppUrl::Help(url) => (fl!("help"), url),
-                    AppUrl::Homepage(url) => (fl!("homepage"), url),
-                    AppUrl::Translate(url) => (fl!("translate"), url),
-                };
-                url_items.push(
-                    widget::button::link(name)
-                        .on_press(Message::LaunchUrl(url.to_string()))
-                        .padding(0)
-                        .into(),
-                );
-            }
-            if grid_width < 416 {
-                column = column.push(widget::column::with_children(url_items).spacing(space_xxxs));
-            } else {
-                column = column.push(
-                    widget::row::with_children(url_items)
-                        .spacing(space_s)
-                        .align_y(Alignment::Center),
-                );
-            }
-        }
-
-        column.into()
     }
 
     fn view_search_results<'a>(
@@ -3160,8 +2757,8 @@ impl App {
         let cosmic_theme::Spacing { space_s, .. } = spacing;
         let grid_width = (size.width - 2.0 * space_s as f32).floor().max(0.0) as usize;
 
-        match &self.selected_opt {
-            Some(selected) => self.view_selected_app(selected, spacing, grid_width),
+        match &self.details_page_opt {
+            Some(details_page) => details_page.view(self, spacing, grid_width),
             None => match &self.search_results {
                 Some((input, results)) => {
                     self.view_search_results(input, results, spacing, grid_width)
@@ -3297,7 +2894,7 @@ impl Application for App {
             explore_results: HashMap::new(),
             installed_results: None,
             search_results: None,
-            selected_opt: None,
+            details_page_opt: None,
             applet_placement_buttons,
             uninstall_purge_data: false,
         };
@@ -3372,7 +2969,7 @@ impl Application for App {
         self.explore_page_opt = None;
         self.search_active = false;
         self.search_results = None;
-        self.selected_opt = None;
+        self.details_page_opt = None;
         self.nav_model.activate(id);
         let mut commands = Vec::with_capacity(2);
         self.scroll_views.clear();
@@ -3522,7 +3119,7 @@ impl Application for App {
 
                 self.update_apps();
                 let mut commands = Vec::new();
-                if self.search_active && self.selected_opt.is_none() {
+                if self.search_active && self.details_page_opt.is_none() {
                     commands.push(self.search());
                 }
                 match self.mode {
@@ -4358,7 +3955,7 @@ impl Application for App {
             ));
         }
 
-        if let Some(selected) = &self.selected_opt {
+        if let Some(selected) = &self.details_page_opt {
             for (screenshot_i, screenshot) in selected.info.screenshots.iter().enumerate() {
                 let url = screenshot.url.clone();
                 subscriptions.push(Subscription::run_with_id(

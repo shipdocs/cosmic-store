@@ -70,6 +70,30 @@ fn extract_wayland_bitcode(element: &xmltree::Element) -> Option<WaylandCompatib
     None
 }
 
+/// Sanitize category elements by stripping trailing punctuation.
+///
+/// Some upstream AppStream data has malformed categories with trailing
+/// semicolons (e.g., "AudioVideo;") which fail to parse. This function
+/// preprocesses the XML element to clean up such issues.
+fn sanitize_categories(element: &mut xmltree::Element) {
+    if let Some(categories_elem) = element.get_mut_child("categories") {
+        for node in categories_elem.children.iter_mut() {
+            if let xmltree::XMLNode::Element(category_elem) = node {
+                if category_elem.name == "category" {
+                    for child in category_elem.children.iter_mut() {
+                        if let xmltree::XMLNode::Text(text) = child {
+                            // Strip trailing punctuation
+                            *text = text
+                                .trim_end_matches(|c: char| c.is_ascii_punctuation())
+                                .to_string();
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 const PREFIXES: &[&str] = &["/usr/share", "/var/lib", "/var/cache"];
 const CATALOGS: &[&str] = &["swcatalog", "app-info"];
 
@@ -722,7 +746,11 @@ impl AppstreamCache {
                         // Extract wayland_compat from custom fields before converting to Component
                         let wayland_compat_from_xml = extract_wayland_bitcode(e);
 
-                        match Component::try_from(e) {
+                        // Clone and sanitize the element to fix malformed upstream data
+                        let mut sanitized_element = e.clone();
+                        sanitize_categories(&mut sanitized_element);
+
+                        match Component::try_from(&sanitized_element) {
                             Ok(component) => {
                                 match component.kind {
                                     ComponentKind::DesktopApplication => {}
@@ -814,7 +842,21 @@ impl AppstreamCache {
                 origin_opt = value["Origin"].as_str().map(|x| x.to_string());
                 media_base_url_opt = value["MediaBaseUrl"].as_str().map(|x| x.to_string());
             } else {
-                match Component::deserialize(&value) {
+                // Sanitize categories in YAML before deserialization
+                let mut sanitized_value = value.clone();
+                if let Some(categories) = sanitized_value.get_mut("Categories") {
+                    if let Some(cat_seq) = categories.as_sequence_mut() {
+                        for cat in cat_seq.iter_mut() {
+                            if let Some(cat_str) = cat.as_str() {
+                                let cleaned =
+                                    cat_str.trim_end_matches(|c: char| c.is_ascii_punctuation());
+                                *cat = serde_yaml::Value::String(cleaned.to_string());
+                            }
+                        }
+                    }
+                }
+
+                match Component::deserialize(&sanitized_value) {
                     Ok(mut component) => {
                         if component.kind != ComponentKind::DesktopApplication {
                             // Skip anything that is not a desktop application

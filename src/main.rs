@@ -98,6 +98,7 @@ use priority::priority;
 mod priority;
 
 mod stats;
+mod url_handlers;
 
 #[derive(Debug, Default, Parser)]
 struct Cli {
@@ -188,6 +189,7 @@ impl Action {
     }
 }
 
+#[derive(Clone, Debug, PartialEq)]
 pub struct AppEntry {
     backend_name: &'static str,
     info: Arc<AppInfo>,
@@ -590,7 +592,7 @@ impl App {
         self.pending_operations.insert(id, (operation, 0.0));
     }
 
-    fn generic_search<F: Fn(&AppId, &AppInfo, bool) -> Option<i64> + Send + Sync>(
+    pub(crate) fn generic_search<F: Fn(&AppId, &AppInfo, bool) -> Option<i64> + Send + Sync>(
         apps: &Apps,
         backends: &Backends,
         os_codename: &str,
@@ -996,15 +998,27 @@ impl App {
         if let Ok(url) = reqwest::Url::parse(&input) {
             match url.scheme() {
                 "appstream" => {
-                    return self.handle_appstream_url(input, url.path());
+                    return url_handlers::handle_appstream_url(
+                        &self.apps,
+                        &self.backends,
+                        &self.os_codename,
+                        input,
+                        url.path(),
+                    );
                 }
                 "file" => {
-                    return self.handle_file_url(input, url.path());
+                    return url_handlers::handle_file_url(&self.backends, input, url.path());
                 }
                 "mime" => {
                     // This is a workaround to be able to search for mime handlers,
                     // mime is not a real URL scheme
-                    return self.handle_mime_url(input, url.path());
+                    return url_handlers::handle_mime_url(
+                        &self.apps,
+                        &self.backends,
+                        &self.os_codename,
+                        input,
+                        url.path(),
+                    );
                 }
                 scheme => {
                     log::warn!("unsupported URL scheme {scheme} in {url}");
@@ -1014,12 +1028,16 @@ impl App {
 
         // Also handle standard file paths
         if input.starts_with("/") && Path::new(&input).is_file() {
-            return self.handle_file_url(input.clone(), &input);
+            return url_handlers::handle_file_url(&self.backends, input.clone(), &input);
         }
 
         // Also handle gstreamer codec strings
         if let Some(gstreamer_codec) = GStreamerCodec::parse(&input) {
-            return self.handle_gstreamer_codec(input.clone(), gstreamer_codec);
+            return url_handlers::handle_gstreamer_codec(
+                &self.backends,
+                input.clone(),
+                gstreamer_codec,
+            );
         }
 
         let pattern = regex::escape(&input);
@@ -2062,194 +2080,6 @@ impl App {
                         }
                     });
                     action::app(Message::Updates(updates))
-                })
-                .await
-                .unwrap_or(action::none())
-            },
-            |x| x,
-        )
-    }
-
-    fn handle_appstream_url(&self, input: String, path: &str) -> Task<Message> {
-        // Handler for appstream:component-id as described in:
-        // https://freedesktop.org/software/appstream/docs/sect-AppStream-Misc-URIHandler.html
-        let apps = self.apps.clone();
-        let backends = self.backends.clone();
-        let os_codename = self.os_codename.clone();
-        let component_id = AppId::new(path.trim_start_matches('/'));
-        Task::perform(
-            async move {
-                tokio::task::spawn_blocking(move || {
-                    let start = Instant::now();
-                    let results = Self::generic_search(
-                        &apps,
-                        &backends,
-                        &os_codename,
-                        |id, _info, _installed| {
-                            //TODO: fuzzy search with lower weight?
-                            if id == &component_id { Some(0) } else { None }
-                        },
-                        SearchSortMode::Relevance,
-                        WaylandFilter::All,
-                    );
-                    let duration = start.elapsed();
-                    log::info!(
-                        "searched for ID {:?} in {:?}, found {} results",
-                        component_id,
-                        duration,
-                        results.len()
-                    );
-                    action::app(Message::SearchResults(input, results, true))
-                })
-                .await
-                .unwrap_or(action::none())
-            },
-            |x| x,
-        )
-    }
-
-    fn handle_file_url(&self, input: String, path: &str) -> Task<Message> {
-        let path = path.to_string();
-        let backends = self.backends.clone();
-        Task::perform(
-            async move {
-                tokio::task::spawn_blocking(move || {
-                    let start = Instant::now();
-                    let mut packages = Vec::new();
-                    for (backend_name, backend) in backends.iter() {
-                        match backend.file_packages(&path) {
-                            Ok(backend_packages) => {
-                                for package in backend_packages {
-                                    packages.push((backend_name, package));
-                                }
-                            }
-                            Err(err) => {
-                                log::warn!(
-                                    "failed to load file {:?} using backend {:?}: {}",
-                                    path,
-                                    backend_name,
-                                    err
-                                );
-                            }
-                        }
-                    }
-                    let duration = start.elapsed();
-                    log::info!(
-                        "loaded file {:?} in {:?}, found {} packages",
-                        path,
-                        duration,
-                        packages.len()
-                    );
-
-                    //TODO: store the resolved packages somewhere
-                    let mut results = Vec::with_capacity(packages.len());
-                    for (backend_name, package) in packages {
-                        results.push(SearchResult::new(
-                            backend_name,
-                            package.id,
-                            Some(package.icon),
-                            package.info,
-                            0,
-                        ));
-                    }
-                    action::app(Message::SearchResults(input, results, true))
-                })
-                .await
-                .unwrap_or(action::none())
-            },
-            |x| x,
-        )
-    }
-
-    fn handle_gstreamer_codec(
-        &self,
-        input: String,
-        gstreamer_codec: GStreamerCodec,
-    ) -> Task<Message> {
-        let backends = self.backends.clone();
-        Task::perform(
-            async move {
-                tokio::task::spawn_blocking(move || {
-                    let start = Instant::now();
-                    let mut packages = Vec::new();
-                    for (backend_name, backend) in backends.iter() {
-                        match backend.gstreamer_packages(&gstreamer_codec) {
-                            Ok(backend_packages) => {
-                                for package in backend_packages {
-                                    packages.push((backend_name, package));
-                                }
-                            }
-                            Err(err) => {
-                                log::warn!(
-                                    "failed to load gstreamer codec {:?} using backend {:?}: {}",
-                                    gstreamer_codec,
-                                    backend_name,
-                                    err
-                                );
-                            }
-                        }
-                    }
-                    let duration = start.elapsed();
-                    log::info!(
-                        "loaded gstreamer codec {:?} in {:?}, found {} packages",
-                        gstreamer_codec,
-                        duration,
-                        packages.len()
-                    );
-
-                    //TODO: store the resolved packages somewhere
-                    let mut results = Vec::with_capacity(packages.len());
-                    for (backend_name, package) in packages {
-                        results.push(SearchResult::new(
-                            backend_name,
-                            package.id,
-                            Some(package.icon),
-                            package.info,
-                            0,
-                        ));
-                    }
-                    action::app(Message::SearchResults(input, results, true))
-                })
-                .await
-                .unwrap_or(action::none())
-            },
-            |x| x,
-        )
-    }
-
-    fn handle_mime_url(&self, input: String, path: &str) -> Task<Message> {
-        let apps = self.apps.clone();
-        let backends = self.backends.clone();
-        let os_codename = self.os_codename.clone();
-        let mime = path.trim_matches('/').to_string();
-        let provide = AppProvide::MediaType(mime.clone());
-        Task::perform(
-            async move {
-                tokio::task::spawn_blocking(move || {
-                    let start = Instant::now();
-                    let results = Self::generic_search(
-                        &apps,
-                        &backends,
-                        &os_codename,
-                        |_id, info, _installed| {
-                            //TODO: monthly downloads as weight?
-                            if info.provides.contains(&provide) {
-                                Some(-(info.monthly_downloads as i64))
-                            } else {
-                                None
-                            }
-                        },
-                        SearchSortMode::Relevance,
-                        WaylandFilter::All,
-                    );
-                    let duration = start.elapsed();
-                    log::info!(
-                        "searched for mime {:?} in {:?}, found {} results",
-                        mime,
-                        duration,
-                        results.len()
-                    );
-                    action::app(Message::SearchResults(input, results, false))
                 })
                 .await
                 .unwrap_or(action::none())

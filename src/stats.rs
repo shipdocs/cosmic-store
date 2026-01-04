@@ -5,12 +5,12 @@ use crate::app_info::WaylandCompatibility;
 use rust_embed::RustEmbed;
 
 const STATS_URL_V8: &str =
-    "https://github.com/shipdocs/cosmic-store/releases/latest/download/flathub-stats.bitcode-v0-8";
+    "https://github.com/shipdocs/cosmic-store/releases/latest/download/flathub-stats.bitcode";
 const STATS_URL: &str =
     "https://github.com/shipdocs/cosmic-store/releases/latest/download/flathub-stats.bitcode-v0-7";
 const METADATA_URL: &str =
     "https://github.com/shipdocs/cosmic-store/releases/latest/download/flathub-metadata.json";
-const STATS_CACHE_PATH_V8: &str = "cosmic-store/flathub-stats.bitcode-v0-8";
+const STATS_CACHE_PATH_V8: &str = "cosmic-store/flathub-stats.bitcode";
 const METADATA_CACHE_PATH: &str = "cosmic-store/flathub-metadata.json";
 const CACHE_MAX_AGE_SECS: u64 = 30 * 24 * 60 * 60; // 30 days
 
@@ -37,7 +37,6 @@ struct FlathubStatsV7 {
 }
 
 struct FlathubStats {
-    generated_at: Option<u64>,
     downloads: HashMap<AppId, u64>,
     compatibility: HashMap<AppId, WaylandCompatibility>,
 }
@@ -221,7 +220,6 @@ fn download_and_cache() -> Option<Vec<u8>> {
 fn decode_v8(data: &[u8]) -> Option<FlathubStats> {
     let v8 = bitcode::decode::<FlathubStatsV8>(data).ok()?;
     Some(FlathubStats {
-        generated_at: Some(v8.generated_at),
         downloads: v8.downloads,
         compatibility: v8.compatibility,
     })
@@ -230,7 +228,6 @@ fn decode_v8(data: &[u8]) -> Option<FlathubStats> {
 fn decode_v7(data: &[u8]) -> Option<FlathubStats> {
     let v7 = bitcode::decode::<FlathubStatsV7>(data).ok()?;
     Some(FlathubStats {
-        generated_at: None,
         downloads: v7.downloads,
         compatibility: v7.compatibility,
     })
@@ -298,7 +295,6 @@ fn load_stats() -> &'static FlathubStats {
             Some(downloads) => {
                 log::info!("loaded flathub statistics v0-6 in {:?}", start.elapsed());
                 FlathubStats {
-                    generated_at: None,
                     downloads,
                     compatibility: HashMap::new(),
                 }
@@ -306,7 +302,6 @@ fn load_stats() -> &'static FlathubStats {
             None => {
                 log::warn!("failed to load any stats");
                 FlathubStats {
-                    generated_at: None,
                     downloads: HashMap::new(),
                     compatibility: HashMap::new(),
                 }
@@ -359,7 +354,6 @@ mod tests {
         let decoded = decode_v8(&encoded);
 
         assert!(decoded.is_some());
-        assert_eq!(decoded.unwrap().generated_at, Some(1704067200));
     }
 
     #[test]
@@ -373,7 +367,6 @@ mod tests {
         let decoded = decode_v7(&encoded);
 
         assert!(decoded.is_some());
-        assert_eq!(decoded.unwrap().generated_at, None);
     }
 
     #[test]

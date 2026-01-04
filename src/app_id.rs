@@ -13,10 +13,12 @@ impl AppId {
         Self(id_raw.to_string())
     }
 
+    #[allow(dead_code)]
     pub fn system() -> Self {
         Self("__SYSTEM__".to_string())
     }
 
+    #[allow(dead_code)]
     pub fn is_system(&self) -> bool {
         self.0 == "__SYSTEM__"
     }

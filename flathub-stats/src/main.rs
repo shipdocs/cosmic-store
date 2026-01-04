@@ -104,7 +104,7 @@ async fn stats(year: u16, month: u8, day: u8) -> Result<Stats, Box<dyn Error>> {
 }
 
 fn leap_year(year: u16) -> bool {
-    (year % 4 == 0 && year % 100 != 0) || year % 400 == 0
+    year.is_multiple_of(4) && (!year.is_multiple_of(100) || year.is_multiple_of(400))
 }
 
 async fn fetch_manifest(app_id: &str) -> Result<serde_json::Value, Box<dyn Error>> {
@@ -155,9 +155,7 @@ fn parse_compatibility(manifest: &serde_json::Value) -> WaylandCompatibility {
 
     let support = if wayland && !x11 && !fallback_x11 {
         WaylandSupport::Native
-    } else if wayland && fallback_x11 {
-        WaylandSupport::Fallback
-    } else if wayland && x11 {
+    } else if wayland && (fallback_x11 || x11) {
         WaylandSupport::Fallback
     } else if x11 && !wayland {
         WaylandSupport::X11Only

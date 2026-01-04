@@ -139,9 +139,9 @@ pub enum ExplorePage {
 impl ExplorePage {
     pub fn all() -> &'static [Self] {
         &[
-            Self::EditorsChoice,
-            Self::PopularApps,
             Self::MadeForCosmic,
+            Self::PopularApps,
+            Self::EditorsChoice,
             //TODO: Self::NewApps,
             Self::RecentlyUpdated,
             Self::DevelopmentTools,

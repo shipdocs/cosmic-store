@@ -297,28 +297,55 @@ mod wayland_bitcode_tests {
 
     #[test]
     fn test_all_risk_levels() {
-        assert_eq!(WaylandCompatibility::decode_bitcode(0x0A).risk_level, RiskLevel::Low);
-        assert_eq!(WaylandCompatibility::decode_bitcode(0x52).risk_level, RiskLevel::Medium);
-        assert_eq!(WaylandCompatibility::decode_bitcode(0x96).risk_level, RiskLevel::High);
-        assert_eq!(WaylandCompatibility::decode_bitcode(0xC1).risk_level, RiskLevel::Critical);
+        assert_eq!(
+            WaylandCompatibility::decode_bitcode(0x0A).risk_level,
+            RiskLevel::Low
+        );
+        assert_eq!(
+            WaylandCompatibility::decode_bitcode(0x52).risk_level,
+            RiskLevel::Medium
+        );
+        assert_eq!(
+            WaylandCompatibility::decode_bitcode(0x96).risk_level,
+            RiskLevel::High
+        );
+        assert_eq!(
+            WaylandCompatibility::decode_bitcode(0xC1).risk_level,
+            RiskLevel::Critical
+        );
     }
 
     #[test]
     fn test_all_frameworks() {
         // GTK3: 0x06 = 00000110 (bits 2-5 = 0001)
-        assert_eq!(WaylandCompatibility::decode_bitcode(0x06).framework, AppFramework::GTK3);
+        assert_eq!(
+            WaylandCompatibility::decode_bitcode(0x06).framework,
+            AppFramework::GTK3
+        );
 
         // GTK4: 0x0A = 00001010 (bits 2-5 = 0010)
-        assert_eq!(WaylandCompatibility::decode_bitcode(0x0A).framework, AppFramework::GTK4);
+        assert_eq!(
+            WaylandCompatibility::decode_bitcode(0x0A).framework,
+            AppFramework::GTK4
+        );
 
         // Qt5: 0x0E = 00001110 (bits 2-5 = 0011)
-        assert_eq!(WaylandCompatibility::decode_bitcode(0x0E).framework, AppFramework::Qt5);
+        assert_eq!(
+            WaylandCompatibility::decode_bitcode(0x0E).framework,
+            AppFramework::Qt5
+        );
 
         // Qt6: 0x12 = 00010010 (bits 2-5 = 0100)
-        assert_eq!(WaylandCompatibility::decode_bitcode(0x12).framework, AppFramework::Qt6);
+        assert_eq!(
+            WaylandCompatibility::decode_bitcode(0x12).framework,
+            AppFramework::Qt6
+        );
 
         // Electron: 0x16 = 00010110 (bits 2-5 = 0101)
-        assert_eq!(WaylandCompatibility::decode_bitcode(0x16).framework, AppFramework::Electron);
+        assert_eq!(
+            WaylandCompatibility::decode_bitcode(0x16).framework,
+            AppFramework::Electron
+        );
     }
 
     #[test]
@@ -364,6 +391,7 @@ pub struct AppInfo {
 }
 
 impl AppInfo {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         source_id: &str,
         source_name: &str,
@@ -395,16 +423,20 @@ impl AppInfo {
             .description
             .as_ref()
             .map_or("", |x| get_markup_translatable(x, locale));
-        let description = match convert_markup(description_markup) {
-            Ok(ok) => ok,
-            Err(err) => {
-                log::warn!(
-                    "failed to parse description of {:?} from {:?}: {}",
-                    component.id,
-                    origin_opt,
-                    err
-                );
-                String::new()
+        let description = if description_markup.is_empty() {
+            String::new()
+        } else {
+            match convert_markup(description_markup) {
+                Ok(ok) => ok,
+                Err(err) => {
+                    log::debug!(
+                        "failed to parse description of {:?} from {:?}: {}",
+                        component.id,
+                        origin_opt,
+                        err
+                    );
+                    String::new()
+                }
             }
         };
         let categories = component
@@ -571,7 +603,11 @@ impl AppInfo {
         {
             use crate::backend::parse_flatpak_metadata;
 
-            if let Some(app_id_raw) = self.desktop_ids.first().or_else(|| self.flatpak_refs.first()) {
+            if let Some(app_id_raw) = self
+                .desktop_ids
+                .first()
+                .or_else(|| self.flatpak_refs.first())
+            {
                 let app_id = app_id_raw.strip_suffix(".desktop").unwrap_or(app_id_raw);
 
                 if let Some(compat) = parse_flatpak_metadata(app_id, true)
@@ -590,14 +626,15 @@ impl AppInfo {
     }
 
     fn heuristic_wayland_compat(&self) -> Option<WaylandCompatibility> {
-        let categories_lower: Vec<String> = self.categories.iter()
-            .map(|c| c.to_lowercase())
-            .collect();
+        let categories_lower: Vec<String> =
+            self.categories.iter().map(|c| c.to_lowercase()).collect();
 
         let name_lower = self.name.to_lowercase();
         let dev_lower = self.developer_name.to_lowercase();
 
-        if categories_lower.iter().any(|c| c.contains("gnome") || c.contains("gtk"))
+        if categories_lower
+            .iter()
+            .any(|c| c.contains("gnome") || c.contains("gtk"))
             || dev_lower.contains("gnome")
             || name_lower.contains("gnome")
         {
@@ -608,7 +645,9 @@ impl AppInfo {
             });
         }
 
-        if categories_lower.iter().any(|c| c.contains("kde") || c.contains("qt"))
+        if categories_lower
+            .iter()
+            .any(|c| c.contains("kde") || c.contains("qt"))
             || dev_lower.contains("kde")
             || name_lower.contains("kde")
         {
@@ -619,7 +658,12 @@ impl AppInfo {
             });
         }
 
-        if name_lower.contains("electron") || self.desktop_ids.iter().any(|id| id.to_lowercase().contains("electron")) {
+        if name_lower.contains("electron")
+            || self
+                .desktop_ids
+                .iter()
+                .any(|id| id.to_lowercase().contains("electron"))
+        {
             return Some(WaylandCompatibility {
                 support: WaylandSupport::Native,
                 framework: AppFramework::Electron,

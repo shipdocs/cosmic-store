@@ -1,3 +1,5 @@
+use std::collections::BTreeSet;
+
 #[derive(Clone, Debug)]
 pub struct GStreamerCodec {
     pub version: String,
@@ -30,4 +32,24 @@ impl GStreamerCodec {
             type_name,
         })
     }
+}
+
+#[derive(Clone, Debug)]
+#[repr(i32)]
+pub enum GStreamerExitCode {
+    Success = 0,
+    NotFound = 1,
+    Error = 2,
+    PartialSuccess = 3,
+    UserAbort = 4,
+}
+
+#[derive(Clone, Debug)]
+pub enum Mode {
+    Normal,
+    GStreamer {
+        codec: GStreamerCodec,
+        selected: BTreeSet<usize>,
+        installing: bool,
+    },
 }

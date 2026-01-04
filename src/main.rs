@@ -20,7 +20,7 @@ use ui::{GridMetrics, package_card_view};
 
 use cosmic::{
     Application, ApplicationExt, Element, action,
-    app::{Core, CosmicFlags, Settings, Task, context_drawer},
+    app::{Core, Settings, Task, context_drawer},
     cosmic_config::{self, CosmicConfigEntry},
     cosmic_theme, executor,
     iced::{
@@ -55,19 +55,26 @@ use std::{
 use app_id::AppId;
 mod app_id;
 
-use app_info::{
-    AppIcon, AppInfo, AppKind, AppProvide, AppUrl,
-};
+use app_info::{AppIcon, AppInfo, AppKind, AppProvide, AppUrl};
 mod app_info;
 
 use appstream_cache::AppstreamCache;
 mod appstream_cache;
 
+mod app_entry;
+use app_entry::{AppEntry, Apps};
+
 use backend::{Backends, Package};
 mod backend;
 
+mod cli;
+use cli::{Cli, Flags};
+
 use config::{AppTheme, CONFIG_VERSION, Config};
 mod config;
+
+mod category;
+use category::Category;
 
 #[cfg(feature = "wayland")]
 use cosmic_panel_config::CosmicPanelConfig;
@@ -75,7 +82,7 @@ use cosmic_panel_config::CosmicPanelConfig;
 use editors_choice::EDITORS_CHOICE;
 mod editors_choice;
 
-use gstreamer::GStreamerCodec;
+use gstreamer::{GStreamerCodec, GStreamerExitCode, Mode};
 mod gstreamer;
 
 use icon_cache::icon_cache_handle;
@@ -98,22 +105,12 @@ mod operation;
 use priority::priority;
 mod priority;
 
+mod source;
 mod stats;
+use source::{Source, SourceKind};
+mod scroll_context;
+use scroll_context::ScrollContext;
 mod url_handlers;
-
-#[derive(Debug, Default, Parser)]
-struct Cli {
-    subcommand_opt: Option<String>,
-    //TODO: should these extra gst-install-plugins-helper arguments actually be handled?
-    #[arg(long)]
-    transient_for: Option<String>,
-    #[arg(long)]
-    interaction: Option<String>,
-    #[arg(long)]
-    desktop_id: Option<String>,
-    #[arg(long)]
-    startup_notification_id: Option<String>,
-}
 
 /// Runs application with these settings
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -190,93 +187,6 @@ impl Action {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
-pub struct AppEntry {
-    backend_name: &'static str,
-    info: Arc<AppInfo>,
-    installed: bool,
-}
-
-pub type Apps = HashMap<AppId, Vec<AppEntry>>;
-
-enum SourceKind {
-    Recommended { data: &'static [u8], enabled: bool },
-    Custom,
-}
-
-struct Source {
-    backend_name: &'static str,
-    id: String,
-    name: String,
-    kind: SourceKind,
-    requires: Vec<String>,
-}
-
-impl Source {
-    fn add(&self) -> Option<RepositoryAdd> {
-        match self.kind {
-            SourceKind::Recommended {
-                data,
-                enabled: false,
-            } => Some(RepositoryAdd {
-                id: self.id.clone(),
-                data: data.to_vec(),
-            }),
-            _ => None,
-        }
-    }
-
-    fn remove(&self) -> Option<RepositoryRemove> {
-        match self.kind {
-            SourceKind::Recommended { enabled: true, .. } | SourceKind::Custom => {
-                Some(RepositoryRemove {
-                    id: self.id.clone(),
-                    name: self.name.clone(),
-                })
-            }
-            _ => None,
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-#[repr(i32)]
-pub enum GStreamerExitCode {
-    Success = 0,
-    NotFound = 1,
-    Error = 2,
-    PartialSuccess = 3,
-    UserAbort = 4,
-}
-
-#[derive(Clone, Debug)]
-pub enum Mode {
-    Normal,
-    GStreamer {
-        codec: GStreamerCodec,
-        selected: BTreeSet<usize>,
-        installing: bool,
-    },
-}
-
-#[derive(Clone, Debug)]
-pub struct Flags {
-    subcommand_opt: Option<String>,
-    config_handler: Option<cosmic_config::Config>,
-    config: Config,
-    mode: Mode,
-}
-
-//TODO
-impl CosmicFlags for Flags {
-    type SubCommand = String;
-    type Args = Vec<String>;
-
-    fn action(&self) -> Option<&String> {
-        self.subcommand_opt.as_ref()
-    }
-}
-
 /// Messages that are used specifically by our [`App`].
 #[derive(Clone, Debug)]
 pub enum Message {
@@ -344,42 +254,6 @@ pub enum Message {
     PlaceApplet(AppId),
 }
 
-// From https://specifications.freedesktop.org/menu-spec/latest/apa.html
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum Category {
-    AudioVideo,
-    Development,
-    Education,
-    Game,
-    Graphics,
-    Network,
-    Office,
-    Science,
-    Settings,
-    System,
-    Utility,
-    CosmicApplet,
-}
-
-impl Category {
-    fn id(&self) -> &'static str {
-        match self {
-            Self::AudioVideo => "AudioVideo",
-            Self::Development => "Development",
-            Self::Education => "Education",
-            Self::Game => "Game",
-            Self::Graphics => "Graphics",
-            Self::Network => "Network",
-            Self::Office => "Office",
-            Self::Science => "Science",
-            Self::Settings => "Settings",
-            Self::System => "System",
-            Self::Utility => "Utility",
-            Self::CosmicApplet => "CosmicApplet",
-        }
-    }
-}
-
 impl Package {
     pub fn grid_metrics(spacing: &cosmic_theme::Spacing, width: usize) -> GridMetrics {
         GridMetrics::new(width, 320 + 2 * spacing.space_s as usize, spacing.space_xxs)
@@ -400,26 +274,6 @@ impl Package {
             spacing,
             width,
         )
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub enum ScrollContext {
-    NavPage,
-    ExplorePage,
-    SearchResults,
-    DetailsPage,
-}
-
-impl ScrollContext {
-    fn unused_contexts(&self) -> &'static [ScrollContext] {
-        // Contexts that can be safely removed when another is active
-        match self {
-            Self::NavPage => &[Self::DetailsPage, Self::SearchResults, Self::ExplorePage],
-            Self::ExplorePage => &[Self::DetailsPage, Self::SearchResults],
-            Self::SearchResults => &[Self::DetailsPage],
-            Self::DetailsPage => &[],
-        }
     }
 }
 

@@ -5,6 +5,7 @@ use crate::category::Category;
 use crate::editors_choice::EDITORS_CHOICE;
 use crate::pages::ExplorePage;
 // Re-export and use Search types
+use crate::app_info::WaylandCompatibility;
 use crate::localize::LANGUAGE_SORTER;
 pub use crate::search::{SearchResult, SearchSortMode, WaylandFilter};
 use rayon::prelude::*;
@@ -13,11 +14,24 @@ use std::path::Path;
 use std::time::Instant;
 
 /// Pure function moved from App::generic_search
+/// Pure function moved from App::generic_search
 pub fn generic_search<
-    F: Fn(&crate::app_id::AppId, &crate::app_info::AppInfo, bool) -> Option<i64> + Send + Sync,
+    F: Fn(
+            &crate::app_id::AppId,
+            &crate::app_info::AppInfo,
+            bool,
+            Option<u64>,
+            Option<WaylandCompatibility>,
+        ) -> Option<i64>
+        + Send
+        + Sync,
 >(
     apps: &Apps,
     backends: &Backends,
+    app_stats: &std::collections::HashMap<
+        crate::app_id::AppId,
+        (u64, Option<WaylandCompatibility>),
+    >,
     os_codename: &str,
     filter_map: F,
     sort_mode: SearchSortMode,
@@ -28,6 +42,8 @@ pub fn generic_search<
     let mut results: Vec<SearchResult> = apps
         .par_iter()
         .filter_map(|(id, infos)| {
+            let (stats_downloads, stats_compat) = app_stats.get(id).cloned().unwrap_or((0, None));
+
             let mut best_weight: Option<i64> = None;
             for AppEntry {
                 backend_name,
@@ -53,7 +69,9 @@ pub fn generic_search<
                     }
                 }
 
-                if let Some(weight) = filter_map(id, info, *installed) {
+                if let Some(weight) =
+                    filter_map(id, info, *installed, Some(stats_downloads), stats_compat)
+                {
                     if let Some(prev_weight) = best_weight {
                         if prev_weight <= weight {
                             continue;
@@ -72,7 +90,7 @@ pub fn generic_search<
             } = infos.first()?;
 
             if wayland_filter != WaylandFilter::All {
-                let compat_opt = info.wayland_compat_lazy();
+                let compat_opt = stats_compat.or_else(|| info.wayland_compat_lazy());
                 let matches_filter = match wayland_filter {
                     WaylandFilter::All => true,
                     WaylandFilter::Excellent => compat_opt
@@ -119,7 +137,15 @@ pub fn generic_search<
         }
         SearchSortMode::MostDownloads => {
             results.par_sort_unstable_by(|a, b| {
-                match b.info.monthly_downloads.cmp(&a.info.monthly_downloads) {
+                let a_downloads = app_stats
+                    .get(&a.id)
+                    .map(|(d, _)| *d)
+                    .unwrap_or(a.info.monthly_downloads);
+                let b_downloads = app_stats
+                    .get(&b.id)
+                    .map(|(d, _)| *d)
+                    .unwrap_or(b.info.monthly_downloads);
+                match b_downloads.cmp(&a_downloads) {
                     cmp::Ordering::Equal => LANGUAGE_SORTER.compare(&a.info.name, &b.info.name),
                     ordering => ordering,
                 }
@@ -137,15 +163,17 @@ pub fn generic_search<
         }
         SearchSortMode::BestWaylandSupport => {
             results.par_sort_unstable_by(|a, b| {
-                let a_risk = a
-                    .info
-                    .wayland_compat_lazy()
+                let a_risk = app_stats
+                    .get(&a.id)
+                    .and_then(|(_, c): &(_, _)| c.as_ref())
                     .map(|c| c.risk_level)
+                    .or_else(|| a.info.wayland_compat_lazy().map(|c| c.risk_level))
                     .unwrap_or(RiskLevel::Critical);
-                let b_risk = b
-                    .info
-                    .wayland_compat_lazy()
+                let b_risk = app_stats
+                    .get(&b.id)
+                    .and_then(|(_, c): &(_, _)| c.as_ref())
                     .map(|c| c.risk_level)
+                    .or_else(|| b.info.wayland_compat_lazy().map(|c| c.risk_level))
                     .unwrap_or(RiskLevel::Critical);
 
                 // Lower risk level = better (Low=0, Medium=1, High=2, Critical=3)
@@ -185,7 +213,7 @@ pub fn generic_search<
         result.icon_opt = Some(appstream_cache.icon(&result.info));
     }
 
-    log::info!("Search algorithm took {:?}", search_start.elapsed());
+    log::warn!("Search algorithm took {:?}", search_start.elapsed());
     results
 }
 
@@ -193,6 +221,10 @@ pub fn generic_search<
 pub fn search_results(
     apps: &Apps,
     backends: &Backends,
+    app_stats: &std::collections::HashMap<
+        crate::app_id::AppId,
+        (u64, Option<WaylandCompatibility>),
+    >,
     os_codename: &str,
     input: &str,
     sort_mode: SearchSortMode,
@@ -218,15 +250,21 @@ pub fn search_results(
     generic_search(
         apps,
         backends,
+        app_stats,
         os_codename,
-        |_id, info, _installed| {
+        |_id,
+         info,
+         _installed,
+         stats_downloads: Option<u64>,
+         _stats_compat: Option<WaylandCompatibility>| {
             if !matches!(info.kind, AppKind::DesktopApplication) {
                 return None;
             }
             //TODO: improve performance
             let stats_weight = |weight: i64| -> i64 {
                 //TODO: make sure no overflows
-                (weight << 56) - (info.monthly_downloads as i64)
+                let downloads = stats_downloads.unwrap_or(info.monthly_downloads);
+                (weight << 56) - (downloads as i64)
             };
 
             //TODO: fuzzy match (nucleus-matcher?)
@@ -262,6 +300,10 @@ pub fn search_results(
 pub fn categories_results(
     apps: &Apps,
     backends: &Backends,
+    app_stats: &std::collections::HashMap<
+        crate::app_id::AppId,
+        (u64, Option<WaylandCompatibility>),
+    >,
     os_codename: &str,
     categories: &[Category],
 ) -> Vec<SearchResult> {
@@ -269,21 +311,27 @@ pub fn categories_results(
     generic_search(
         apps,
         backends,
+        app_stats,
         os_codename,
-        |_id, info, _installed| {
+        |_id,
+         info,
+         _installed,
+         stats_downloads: Option<u64>,
+         _stats_compat: Option<WaylandCompatibility>| {
             if !matches!(info.kind, AppKind::DesktopApplication) {
                 return None;
             }
+            let downloads = stats_downloads.unwrap_or(info.monthly_downloads);
             for category in categories {
                 //TODO: this hack makes it easier to add applets to the nav bar
                 if matches!(category, Category::CosmicApplet) {
                     if info.provides.contains(&applet_provide) {
-                        return Some(-(info.monthly_downloads as i64));
+                        return Some(-(downloads as i64));
                     }
                 } else {
                     //TODO: contains doesn't work due to type mismatch
                     if info.categories.iter().any(|x| x == category.id()) {
-                        return Some(-(info.monthly_downloads as i64));
+                        return Some(-(downloads as i64));
                     }
                 }
             }
@@ -298,6 +346,10 @@ pub fn categories_results(
 pub fn explore_results_data(
     apps: &Apps,
     backends: &Backends,
+    app_stats: &std::collections::HashMap<
+        crate::app_id::AppId,
+        (u64, Option<WaylandCompatibility>),
+    >,
     os_codename: &str,
     explore_page: ExplorePage,
     now: i64,
@@ -306,8 +358,13 @@ pub fn explore_results_data(
         ExplorePage::EditorsChoice => generic_search(
             apps,
             backends,
+            app_stats,
             os_codename,
-            |id, _info, _installed| {
+            |id,
+             _info,
+             _installed,
+             _stats_downloads: Option<u64>,
+             _stats_compat: Option<WaylandCompatibility>| {
                 EDITORS_CHOICE
                     .iter()
                     .position(|choice_id| choice_id == &id.normalized())
@@ -319,12 +376,18 @@ pub fn explore_results_data(
         ExplorePage::PopularApps => generic_search(
             apps,
             backends,
+            app_stats,
             os_codename,
-            |_id, info, _installed| {
+            |_id,
+             info,
+             _installed,
+             stats_downloads: Option<u64>,
+             _stats_compat: Option<WaylandCompatibility>| {
                 if !matches!(info.kind, AppKind::DesktopApplication) {
                     return None;
                 }
-                Some(-(info.monthly_downloads as i64))
+                let downloads = stats_downloads.unwrap_or(info.monthly_downloads);
+                Some(-(downloads as i64))
             },
             SearchSortMode::Relevance,
             WaylandFilter::All,
@@ -334,13 +397,19 @@ pub fn explore_results_data(
             generic_search(
                 apps,
                 backends,
+                app_stats,
                 os_codename,
-                |_id, info, _installed| {
+                |_id,
+                 info,
+                 _installed,
+                 stats_downloads: Option<u64>,
+                 _stats_compat: Option<WaylandCompatibility>| {
                     if !matches!(info.kind, AppKind::DesktopApplication) {
                         return None;
                     }
                     if info.provides.contains(&provide) {
-                        Some(-(info.monthly_downloads as i64))
+                        let downloads = stats_downloads.unwrap_or(info.monthly_downloads);
+                        Some(-(downloads as i64))
                     } else {
                         None
                     }
@@ -352,8 +421,13 @@ pub fn explore_results_data(
         ExplorePage::NewApps => generic_search(
             apps,
             backends,
+            app_stats,
             os_codename,
-            |_id, _info, _installed| {
+            |_id,
+             _info,
+             _installed,
+             _stats_downloads: Option<u64>,
+             _stats_compat: Option<WaylandCompatibility>| {
                 //TODO
                 None
             },
@@ -363,8 +437,13 @@ pub fn explore_results_data(
         ExplorePage::RecentlyUpdated => generic_search(
             apps,
             backends,
+            app_stats,
             os_codename,
-            |id, info, _installed| {
+            |id,
+             info,
+             _installed,
+             _stats_downloads: Option<u64>,
+             _stats_compat: Option<WaylandCompatibility>| {
                 if !matches!(info.kind, AppKind::DesktopApplication) {
                     return None;
                 }
@@ -398,15 +477,21 @@ pub fn explore_results_data(
             generic_search(
                 apps,
                 backends,
+                app_stats,
                 os_codename,
-                |_id, info, _installed| {
+                |_id,
+                 info,
+                 _installed,
+                 stats_downloads: Option<u64>,
+                 _stats_compat: Option<WaylandCompatibility>| {
                     if !matches!(info.kind, AppKind::DesktopApplication) {
                         return None;
                     }
+                    let downloads = stats_downloads.unwrap_or(info.monthly_downloads);
                     for category in categories {
                         //TODO: contains doesn't work due to type mismatch
                         if info.categories.iter().any(|x| x == category.id()) {
-                            return Some(-(info.monthly_downloads as i64));
+                            return Some(-(downloads as i64));
                         }
                     }
                     None
@@ -422,13 +507,22 @@ pub fn explore_results_data(
 pub fn installed_results_data(
     apps: &Apps,
     backends: &Backends,
+    app_stats: &std::collections::HashMap<
+        crate::app_id::AppId,
+        (u64, Option<WaylandCompatibility>),
+    >,
     os_codename: &str,
 ) -> Vec<SearchResult> {
     generic_search(
         apps,
         backends,
+        app_stats,
         os_codename,
-        |id, _info, installed| {
+        |id,
+         _info,
+         installed,
+         _stats_downloads: Option<u64>,
+         _stats_compat: Option<WaylandCompatibility>| {
             if installed {
                 Some(if id.is_system() { -1 } else { 0 })
             } else {

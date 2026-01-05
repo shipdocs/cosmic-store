@@ -766,12 +766,10 @@ impl AppstreamCache {
                                 }
 
                                 let id = AppId::new(&component.id.0);
-                                let monthly_downloads =
-                                    stats::try_monthly_downloads(&id).unwrap_or(0);
+                                let monthly_downloads = 0;
 
-                                // Use bitcode from XML if available, otherwise fall back to stats
-                                let wayland_compat = wayland_compat_from_xml
-                                    .or_else(|| stats::try_wayland_compatibility(&id));
+                                // Use bitcode from XML if available
+                                let wayland_compat = wayland_compat_from_xml;
 
                                 if wayland_compat_from_xml.is_some() {
                                     log::debug!(
@@ -1311,7 +1309,7 @@ impl AppstreamCache {
                         }
 
                         let id = AppId::new(&component.id.0);
-                        let monthly_downloads = stats::try_monthly_downloads(&id).unwrap_or(0);
+                        let monthly_downloads = 0;
 
                         // Extract wayland_compat from YAML custom fields if available
                         let wayland_compat_from_yaml = value
@@ -1329,8 +1327,7 @@ impl AppstreamCache {
                             });
 
                         // Use bitcode from YAML if available, otherwise fall back to stats
-                        let wayland_compat = wayland_compat_from_yaml
-                            .or_else(|| stats::try_wayland_compatibility(&id));
+                        let wayland_compat = wayland_compat_from_yaml;
 
                         if wayland_compat_from_yaml.is_some() {
                             log::debug!(

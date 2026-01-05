@@ -318,6 +318,11 @@ pub fn try_wayland_compatibility(id: &AppId) -> Option<WaylandCompatibility> {
     STATS.get()?.compatibility.get(id).cloned()
 }
 
+pub fn load_stats_map() -> (HashMap<AppId, u64>, HashMap<AppId, WaylandCompatibility>) {
+    let stats = load_stats();
+    (stats.downloads.clone(), stats.compatibility.clone())
+}
+
 /// Load stats in background thread, refresh cache if stale.
 pub fn load_stats_async() {
     std::thread::spawn(|| {

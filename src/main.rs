@@ -248,6 +248,7 @@ pub struct App {
     applet_placement_buttons: cosmic::widget::segmented_button::SingleSelectModel,
     uninstall_purge_data: bool,
     loading_frame: usize,
+    app_stats: HashMap<AppId, (u64, Option<crate::app_info::WaylandCompatibility>)>,
 }
 
 impl DetailsPageActions for App {
@@ -343,6 +344,7 @@ impl App {
     fn categories(&self, categories: &'static [Category]) -> Task<Message> {
         let apps = self.apps.clone();
         let backends = self.backends.clone();
+        let app_stats = self.app_stats.clone();
         let os_codename = self.os_codename.clone();
         Task::perform(
             async move {
@@ -351,6 +353,7 @@ impl App {
                     let results = crate::search_logic::categories_results(
                         &apps,
                         &backends,
+                        &app_stats,
                         &os_codename,
                         categories,
                     );
@@ -373,6 +376,7 @@ impl App {
     fn explore_results(&self, explore_page: ExplorePage) -> Task<Message> {
         let apps = self.apps.clone();
         let backends = self.backends.clone();
+        let app_stats = self.app_stats.clone();
         let os_codename = self.os_codename.clone();
         Task::perform(
             async move {
@@ -383,6 +387,7 @@ impl App {
                     let results = crate::search_logic::explore_results_data(
                         &apps,
                         &backends,
+                        &app_stats,
                         &os_codename,
                         explore_page,
                         now,
@@ -406,13 +411,18 @@ impl App {
     fn installed_results(&self) -> Task<Message> {
         let apps = self.apps.clone();
         let backends = self.backends.clone();
+        let app_stats = self.app_stats.clone();
         let os_codename = self.os_codename.clone();
         Task::perform(
             async move {
                 tokio::task::spawn_blocking(move || {
                     let start = Instant::now();
-                    let results =
-                        crate::search_logic::installed_results_data(&apps, &backends, &os_codename);
+                    let results = crate::search_logic::installed_results_data(
+                        &apps,
+                        &backends,
+                        &app_stats,
+                        &os_codename,
+                    );
                     let duration = start.elapsed();
                     log::info!(
                         "searched for installed in {:?}, found {} results",
@@ -438,6 +448,7 @@ impl App {
                     return url_handlers::handle_appstream_url(
                         &self.apps,
                         &self.backends,
+                        &self.app_stats,
                         &self.os_codename,
                         input,
                         url.path(),
@@ -452,6 +463,7 @@ impl App {
                     return url_handlers::handle_mime_url(
                         &self.apps,
                         &self.backends,
+                        &self.app_stats,
                         &self.os_codename,
                         input,
                         url.path(),
@@ -479,6 +491,7 @@ impl App {
 
         let apps = self.apps.clone();
         let backends = self.backends.clone();
+        let app_stats = self.app_stats.clone();
         let os_codename = self.os_codename.clone();
         let sort_mode = self.search_sort_mode;
         let wayland_filter = self.wayland_filter;
@@ -489,6 +502,7 @@ impl App {
                     let results = crate::search_logic::search_results(
                         &apps,
                         &backends,
+                        &app_stats,
                         &os_codename,
                         &input,
                         sort_mode,
@@ -987,6 +1001,51 @@ impl App {
             Message::Updates(updates) => {
                 self.updates = Some(updates);
                 Task::none()
+            }
+            Message::StatsLoaded((downloads, compatibility)) => {
+                log::info!(
+                    "Received async stats: {} downloads, {} compatibility entries",
+                    downloads.len(),
+                    compatibility.len()
+                );
+                for (id, count) in downloads {
+                    self.app_stats.entry(id).or_insert((0, None)).0 = count;
+                }
+                for (id, compat) in compatibility {
+                    self.app_stats.entry(id).or_insert((0, None)).1 = Some(compat);
+                }
+
+                let mut commands = Vec::new();
+                if self.search_active && self.details_page_opt.is_none() {
+                    commands.push(self.search());
+                }
+
+                if matches!(self.mode, Mode::Normal) {
+                    if let Some(nav_page) = self.nav_model.active_data::<NavPage>() {
+                        match nav_page {
+                            NavPage::Explore => {
+                                if let Some(explore_page) = self.explore_page_opt {
+                                    commands.push(self.explore_results(explore_page));
+                                } else {
+                                    for page in
+                                        self.explore_results.keys().cloned().collect::<Vec<_>>()
+                                    {
+                                        commands.push(self.explore_results(page));
+                                    }
+                                }
+                            }
+                            NavPage::Installed => {
+                                commands.push(self.installed_results());
+                            }
+                            _ => {
+                                if let Some(categories) = nav_page.categories() {
+                                    commands.push(self.categories(categories));
+                                }
+                            }
+                        }
+                    }
+                }
+                Task::batch(commands)
             }
             _ => Task::none(),
         }
@@ -2382,6 +2441,7 @@ impl Application for App {
             applet_placement_buttons,
             uninstall_purge_data: false,
             loading_frame: 0,
+            app_stats: HashMap::new(),
         };
 
         if let Some(subcommand) = flags.subcommand_opt {
@@ -2397,7 +2457,17 @@ impl Application for App {
             }
         }
 
-        let command = Task::batch([app.update_title(), app.update_backends(false)]);
+        let command = Task::batch([
+            app.update_title(),
+            app.update_backends(false),
+            Task::perform(
+                async move {
+                    crate::stats::load_stats_async();
+                    crate::stats::load_stats_map()
+                },
+                |stats| action::app(Message::StatsLoaded(stats)),
+            ),
+        ]);
         (app, command)
     }
 
@@ -2490,6 +2560,7 @@ impl Application for App {
                 return Task::none();
             }
             Message::Backends(_)
+            | Message::StatsLoaded(_)
             | Message::CheckUpdates
             | Message::UpdateAll
             | Message::Updates(_) => {

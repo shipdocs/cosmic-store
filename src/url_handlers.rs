@@ -12,6 +12,10 @@ use std::time::Instant;
 pub fn handle_appstream_url(
     apps: &Arc<Apps>,
     backends: &Backends,
+    app_stats: &std::collections::HashMap<
+        crate::app_id::AppId,
+        (u64, Option<crate::app_info::WaylandCompatibility>),
+    >,
     os_codename: &str,
     input: String,
     path: &str,
@@ -20,6 +24,7 @@ pub fn handle_appstream_url(
     // https://freedesktop.org/software/appstream/docs/sect-AppStream-Misc-URIHandler.html
     let apps = apps.clone();
     let backends = backends.clone();
+    let app_stats = app_stats.clone();
     let os_codename = os_codename.to_string();
     let component_id = AppId::new(path.trim_start_matches('/'));
     Task::perform(
@@ -29,8 +34,9 @@ pub fn handle_appstream_url(
                 let results = crate::search_logic::generic_search(
                     &apps,
                     &backends,
+                    &app_stats,
                     &os_codename,
-                    |id, _info, _installed| {
+                    |id, _info, _installed, _stats_downloads, _stats_compat| {
                         //TODO: fuzzy search with lower weight?
                         if id == &component_id { Some(0) } else { None }
                     },
@@ -165,12 +171,17 @@ pub fn handle_gstreamer_codec(
 pub fn handle_mime_url(
     apps: &Arc<Apps>,
     backends: &Backends,
+    app_stats: &std::collections::HashMap<
+        crate::app_id::AppId,
+        (u64, Option<crate::app_info::WaylandCompatibility>),
+    >,
     os_codename: &str,
     input: String,
     path: &str,
 ) -> Task<Message> {
     let apps = apps.clone();
     let backends = backends.clone();
+    let app_stats = app_stats.clone();
     let os_codename = os_codename.to_string();
     let mime = path.trim_matches('/').to_string();
     let provide = AppProvide::MediaType(mime.clone());
@@ -181,11 +192,13 @@ pub fn handle_mime_url(
                 let results = crate::search_logic::generic_search(
                     &apps,
                     &backends,
+                    &app_stats,
                     &os_codename,
-                    |_id, info, _installed| {
+                    |_id, info, _installed, stats_downloads, _stats_compat| {
                         //TODO: monthly downloads as weight?
                         if info.provides.contains(&provide) {
-                            Some(-(info.monthly_downloads as i64))
+                            let downloads = stats_downloads.unwrap_or(info.monthly_downloads);
+                            Some(-(downloads as i64))
                         } else {
                             None
                         }

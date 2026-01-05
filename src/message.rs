@@ -35,6 +35,12 @@ impl Action {
 pub enum Message {
     AppTheme(AppTheme),
     Backends(Backends),
+    StatsLoaded(
+        (
+            std::collections::HashMap<crate::AppId, u64>,
+            std::collections::HashMap<crate::AppId, crate::app_info::WaylandCompatibility>,
+        ),
+    ),
     Apps(Arc<crate::app_entry::Apps>),
     CategoryResults(&'static [Category], Vec<SearchResult>),
     CheckUpdates,

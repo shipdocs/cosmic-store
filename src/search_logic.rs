@@ -10,6 +10,7 @@ pub use crate::search::{SearchResult, SearchSortMode, WaylandFilter};
 use rayon::prelude::*;
 use std::cmp;
 use std::path::Path;
+use std::time::Instant;
 
 /// Pure function moved from App::generic_search
 pub fn generic_search<
@@ -22,9 +23,7 @@ pub fn generic_search<
     sort_mode: SearchSortMode,
     wayland_filter: WaylandFilter,
 ) -> Vec<SearchResult> {
-    // We need to access crate::constants::MAX_RESULTS.
-    // Since this is a new module, we assuming crate::constants is accessible.
-    let max_results = crate::constants::MAX_RESULTS;
+    let search_start = Instant::now();
 
     let mut results: Vec<SearchResult> = apps
         .par_iter()
@@ -170,9 +169,9 @@ pub fn generic_search<
             });
         }
     }
+
     // Load only enough icons to show one page of results
-    //TODO: load in background
-    for result in results.iter_mut().take(max_results) {
+    for result in results.iter_mut().take(crate::constants::MAX_RESULTS) {
         let Some(backend) = backends.get(result.backend_name()) else {
             continue;
         };
@@ -185,6 +184,8 @@ pub fn generic_search<
         };
         result.icon_opt = Some(appstream_cache.icon(&result.info));
     }
+
+    log::info!("Search algorithm took {:?}", search_start.elapsed());
     results
 }
 

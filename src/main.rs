@@ -1325,6 +1325,7 @@ impl App {
             };
 
         //TODO: par_iter?
+        let mapping_start = Instant::now();
         for (backend_name, backend) in self.backends.iter() {
             for appstream_cache in backend.info_caches() {
                 for (id, info) in appstream_cache.infos.iter() {
@@ -1338,6 +1339,7 @@ impl App {
                 }
             }
         }
+        log::info!("Apps mapping loop took {:?}", mapping_start.elapsed());
 
         // Manually insert system apps
         if let Some(installed) = &self.installed {
@@ -1412,6 +1414,16 @@ impl App {
                             LANGUAGE_SORTER.compare(&a.1.info.name, &b.1.info.name)
                         }
                     });
+                    let mut installed_results = Vec::new();
+                    for (backend_name, package) in &installed {
+                        installed_results.push(SearchResult::new(
+                            backend_name,
+                            package.id.clone(),
+                            None,
+                            package.info.clone(),
+                            0,
+                        ));
+                    }
                     action::app(Message::Installed(installed))
                 })
                 .await
@@ -2471,6 +2483,10 @@ impl Application for App {
                 if matches!(self.mode, Mode::Normal) {
                     self.loading_frame = self.loading_frame.wrapping_add(1);
                 }
+                return Task::none();
+            }
+            Message::Apps(apps) => {
+                self.apps = apps;
                 return Task::none();
             }
             Message::Backends(_)

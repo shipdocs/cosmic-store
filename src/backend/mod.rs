@@ -60,6 +60,7 @@ pub trait Backend: fmt::Debug + Send + Sync {
 pub type Backends = BTreeMap<&'static str, Arc<dyn Backend>>;
 
 pub fn backends(locale: &str, refresh: bool) -> Backends {
+    let total_start = Instant::now();
     let mut backends = Backends::new();
 
     #[cfg(feature = "flatpak")]
@@ -133,5 +134,7 @@ pub fn backends(locale: &str, refresh: bool) -> Backends {
         log::info!("trimmed allocations in {:?}", duration);
     }
 
+    let duration = total_start.elapsed();
+    log::info!("Total backend initialization took {:?}", duration);
     backends
 }

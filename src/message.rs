@@ -35,6 +35,7 @@ impl Action {
 pub enum Message {
     AppTheme(AppTheme),
     Backends(Backends),
+    Apps(Arc<crate::app_entry::Apps>),
     CategoryResults(&'static [Category], Vec<SearchResult>),
     CheckUpdates,
     Config(Config),

@@ -27,7 +27,7 @@ pub fn generic_search<
         + Sync,
 >(
     apps: &Apps,
-    backends: &Backends,
+    _backends: &Backends,
     app_stats: &std::collections::HashMap<
         crate::app_id::AppId,
         (u64, Option<WaylandCompatibility>),
@@ -203,22 +203,7 @@ pub fn generic_search<
         }
     }
 
-    // Load only enough icons to show one page of results
-    // Use parallel iterator to avoid blocking on sequential icon I/O
-    results.par_iter_mut().take(crate::constants::MAX_RESULTS).for_each(|result| {
-        let Some(backend) = backends.get(result.backend_name()) else {
-            return;
-        };
-        let appstream_caches = backend.info_caches();
-        let Some(appstream_cache) = appstream_caches
-            .iter()
-            .find(|x| x.source_id == result.info.source_id)
-        else {
-            return;
-        };
-        result.icon_opt = Some(appstream_cache.icon(&result.info));
-    });
-
+    // Icons are now loaded lazily in the view layer to avoid expensive I/O during search
     log::warn!("Search algorithm took {:?}", search_start.elapsed());
     results
 }
@@ -349,6 +334,7 @@ pub fn categories_results(
 }
 
 /// Extracted explore page logic
+#[allow(dead_code)]
 pub fn explore_results_data(
     apps: &Apps,
     backends: &Backends,
@@ -538,4 +524,154 @@ pub fn installed_results_data(
         SearchSortMode::Relevance,
         WaylandFilter::All,
     )
+}
+
+
+/// Calculate weight for a single explore page result
+fn calculate_explore_weight(
+    id: &crate::app_id::AppId,
+    info: &crate::app_info::AppInfo,
+    explore_page: ExplorePage,
+    downloads: u64,
+    now: i64,
+) -> Option<i64> {
+    match explore_page {
+        ExplorePage::EditorsChoice => {
+            EDITORS_CHOICE
+                .iter()
+                .position(|choice_id| choice_id == &id.normalized())
+                .map(|x| x as i64)
+        }
+        ExplorePage::PopularApps => {
+            if !matches!(info.kind, AppKind::DesktopApplication) {
+                return None;
+            }
+            Some(-(downloads as i64))
+        }
+        ExplorePage::MadeForCosmic => {
+            if !matches!(info.kind, AppKind::DesktopApplication) {
+                return None;
+            }
+            let provide = AppProvide::Id("com.system76.CosmicApplication".to_string());
+            if info.provides.contains(&provide) {
+                Some(-(downloads as i64))
+            } else {
+                None
+            }
+        }
+        ExplorePage::NewApps => {
+            //TODO
+            None
+        }
+        ExplorePage::RecentlyUpdated => {
+            if !matches!(info.kind, AppKind::DesktopApplication) {
+                return None;
+            }
+            let mut min_weight = 0;
+            for release in info.releases.iter() {
+                if let Some(timestamp) = release.timestamp {
+                    if timestamp < now {
+                        let weight = -timestamp;
+                        if weight < min_weight {
+                            min_weight = weight;
+                        }
+                    }
+                }
+            }
+            Some(min_weight)
+        }
+        _ => {
+            // Category-based explore pages
+            if !matches!(info.kind, AppKind::DesktopApplication) {
+                return None;
+            }
+            let categories = explore_page.categories();
+            if categories.is_empty() {
+                return None;
+            }
+            if info.categories.iter().any(|x| categories.iter().any(|c| x == c.id())) {
+                Some(-(downloads as i64))
+            } else {
+                None
+            }
+        }
+    }
+}
+
+/// Batch all explore page searches into a single pass over all apps
+/// This is O(N) instead of O(13N) for running each search separately
+pub fn explore_results_all(
+    apps: &Apps,
+    _backends: &Backends,
+    app_stats: &std::collections::HashMap<
+        crate::app_id::AppId,
+        (u64, Option<WaylandCompatibility>),
+    >,
+    os_codename: &str,
+    now: i64,
+) -> std::collections::HashMap<ExplorePage, Vec<SearchResult>> {
+    use std::collections::HashMap;
+    
+    let mut results_map: HashMap<ExplorePage, Vec<SearchResult>> = HashMap::new();
+    
+    // Initialize empty result vectors for all explore pages
+    for page in ExplorePage::all().iter() {
+        results_map.insert(*page, Vec::new());
+    }
+    
+    // Single pass over all apps
+    for (id, infos) in apps.iter() {
+        let (stats_downloads, _stats_compat) = app_stats.get(id).cloned().unwrap_or((0, None));
+        
+        // Use first info as it is preferred
+        let Some(AppEntry {
+            backend_name,
+            info,
+            installed: _,
+        }) = infos.first() else {
+            continue;
+        };
+        
+        // Check origin filter for non-flatpak apps
+        let is_flatpak = backend_name.starts_with("flatpak-");
+        if !is_flatpak {
+            if let Some(origin) = &info.origin_opt {
+                if !origin.is_empty() && !origin.contains(os_codename) {
+                    continue;
+                }
+            }
+        }
+        
+        let downloads = stats_downloads;
+        
+        // Check all explore pages for this app
+        for explore_page in ExplorePage::all().iter() {
+            // Calculate weight for this explore page
+            if let Some(weight) = calculate_explore_weight(id, info, *explore_page, downloads, now) {
+                let result = SearchResult::new(
+                    backend_name,
+                    id.clone(),
+                    None,
+                    info.clone(),
+                    weight,
+                );
+                results_map.get_mut(explore_page).unwrap().push(result);
+            }
+        }
+    }
+    
+    // Sort each explore page's results
+    for (_page, results) in results_map.iter_mut() {
+        results.par_sort_unstable_by(|a, b| match a.weight.cmp(&b.weight) {
+            cmp::Ordering::Equal => match LANGUAGE_SORTER.compare(&a.info.name, &b.info.name) {
+                cmp::Ordering::Equal => {
+                    LANGUAGE_SORTER.compare(a.backend_name(), b.backend_name())
+                }
+                ordering => ordering,
+            },
+            ordering => ordering,
+        });
+    }
+    
+    results_map
 }

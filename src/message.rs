@@ -50,6 +50,7 @@ pub enum Message {
     DialogPage(DialogPage),
     ExplorePage(Option<ExplorePage>),
     ExploreResults(ExplorePage, Vec<SearchResult>),
+    ExploreResultsReady(std::collections::HashMap<ExplorePage, Vec<SearchResult>>),
     GStreamerExit(GStreamerExitCode),
     GStreamerInstall,
     GStreamerToggle(usize),

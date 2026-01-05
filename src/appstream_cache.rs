@@ -264,9 +264,9 @@ impl AppstreamCache {
         dirs::cache_dir().map(|x| x.join("cosmic-store").join(cache_name))
     }
 
-    /// Versioned filename of cache
+    /// Filename of cache (unversioned, follows new naming convention)
     fn cache_filename() -> &'static str {
-        "appstream_cache-v2.bitcode-v0-6"
+        "appstream_cache.bitcode"
     }
 
     /// Remove all files from cache not matching filename

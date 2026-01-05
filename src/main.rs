@@ -373,6 +373,7 @@ impl App {
         )
     }
 
+    #[allow(dead_code)]
     fn explore_results(&self, explore_page: ExplorePage) -> Task<Message> {
         let apps = self.apps.clone();
         let backends = self.backends.clone();
@@ -400,6 +401,40 @@ impl App {
                         results.len()
                     );
                     action::app(Message::ExploreResults(explore_page, results))
+                })
+                .await
+                .unwrap_or(action::none())
+            },
+            |x| x,
+        )
+    }
+
+    fn explore_results_all_batch(&self) -> Task<Message> {
+        let apps = self.apps.clone();
+        let backends = self.backends.clone();
+        let app_stats = self.app_stats.clone();
+        let os_codename = self.os_codename.clone();
+        Task::perform(
+            async move {
+                tokio::task::spawn_blocking(move || {
+                    log::info!("start batch search for all explore pages ({} apps)", apps.len());
+                    let start = Instant::now();
+                    let now = chrono::Utc::now().timestamp();
+                    let results_map = crate::search_logic::explore_results_all(
+                        &apps,
+                        &backends,
+                        &app_stats,
+                        &os_codename,
+                        now,
+                    );
+                    let duration = start.elapsed();
+                    let total_results: usize = results_map.values().map(|v| v.len()).sum();
+                    log::info!(
+                        "batch search for all explore pages in {:?}, found {} total results",
+                        duration,
+                        total_results
+                    );
+                    action::app(Message::ExploreResultsReady(results_map))
                 })
                 .await
                 .unwrap_or(action::none())
@@ -436,6 +471,32 @@ impl App {
             },
             |x| x,
         )
+    }
+
+    /// Load icons for search results (lazy loading - called when results are displayed)
+    fn load_icons_for_results(&self, results: &mut [crate::search::SearchResult]) {
+        use crate::constants::MAX_RESULTS;
+
+        // Load icons for the first page of results
+        // Note: Sequential iteration because Handle is not thread-safe
+        for result in results.iter_mut().take(MAX_RESULTS) {
+            // Skip if icon is already loaded
+            if result.icon_opt.is_some() {
+                continue;
+            }
+
+            let Some(backend) = self.backends.get(result.backend_name()) else {
+                continue;
+            };
+            let appstream_caches = backend.info_caches();
+            let Some(appstream_cache) = appstream_caches
+                .iter()
+                .find(|x| x.source_id == result.info.source_id)
+            else {
+                continue;
+            };
+            result.icon_opt = Some(appstream_cache.icon(&result.info));
+        }
     }
 
     fn search(&self) -> Task<Message> {
@@ -835,7 +896,9 @@ impl App {
 
     fn handle_search_message(&mut self, message: Message) -> Task<Message> {
         match message {
-            Message::CategoryResults(categories, results) => {
+            Message::CategoryResults(categories, mut results) => {
+                // Load icons lazily when results are received (not during search)
+                self.load_icons_for_results(&mut results);
                 self.category_results = Some((categories, results));
                 self.update_scroll()
             }
@@ -864,8 +927,11 @@ impl App {
                     Task::none()
                 }
             }
-            Message::SearchResults(input, results, auto_select) => {
+            Message::SearchResults(input, mut results, auto_select) => {
                 if input == self.search_input {
+                    // Load icons lazily when results are received (not during search)
+                    self.load_icons_for_results(&mut results);
+
                     self.details_page_opt = None;
                     if auto_select && results.len() == 1 {
                         let _ = self.select(
@@ -1004,7 +1070,7 @@ impl App {
             }
             Message::StatsLoaded((downloads, compatibility)) => {
                 log::info!(
-                    "Received async stats: {} downloads, {} compatibility entries",
+                    "Received {} downloads, {} compatibility entries",
                     downloads.len(),
                     compatibility.len()
                 );
@@ -1020,31 +1086,8 @@ impl App {
                     commands.push(self.search());
                 }
 
-                if matches!(self.mode, Mode::Normal) {
-                    if let Some(nav_page) = self.nav_model.active_data::<NavPage>() {
-                        match nav_page {
-                            NavPage::Explore => {
-                                if let Some(explore_page) = self.explore_page_opt {
-                                    commands.push(self.explore_results(explore_page));
-                                } else {
-                                    for page in
-                                        self.explore_results.keys().cloned().collect::<Vec<_>>()
-                                    {
-                                        commands.push(self.explore_results(page));
-                                    }
-                                }
-                            }
-                            NavPage::Installed => {
-                                commands.push(self.installed_results());
-                            }
-                            _ => {
-                                if let Some(categories) = nav_page.categories() {
-                                    commands.push(self.categories(categories));
-                                }
-                            }
-                        }
-                    }
-                }
+                // Don't trigger searches here - apps aren't populated yet.
+                // Searches will be triggered by the Installed message after update_apps() runs.
                 Task::batch(commands)
             }
             _ => Task::none(),
@@ -2617,7 +2660,17 @@ impl Application for App {
                 return self.update_scroll();
             }
             Message::ExploreResults(explore_page, results) => {
+                // Load icons lazily when results are received (not during search)
+                let mut results = results;
+                self.load_icons_for_results(&mut results);
                 self.explore_results.insert(explore_page, results);
+            }
+            Message::ExploreResultsReady(results_map) => {
+                // Batch results received - load icons and insert all at once
+                for (explore_page, mut results) in results_map {
+                    self.load_icons_for_results(&mut results);
+                    self.explore_results.insert(explore_page, results);
+                }
             }
             Message::GStreamerExit(code) => match self.mode {
                 Mode::Normal => {}
@@ -2698,15 +2751,17 @@ impl Application for App {
                             commands.push(self.categories(categories));
                         }
                         commands.push(self.installed_results());
-                        for explore_page in ExplorePage::all() {
-                            commands.push(self.explore_results(*explore_page));
-                        }
+                        // Batch all explore page searches into a single O(N) pass instead of O(13N)
+                        commands.push(self.explore_results_all_batch());
                     }
                     Mode::GStreamer { .. } => {}
                 }
                 return Task::batch(commands);
             }
             Message::InstalledResults(installed_results) => {
+                // Load icons lazily when results are received (not during search)
+                let mut installed_results = installed_results;
+                self.load_icons_for_results(&mut installed_results);
                 self.installed_results = Some(installed_results);
             }
             Message::Key(modifiers, key, text) => {

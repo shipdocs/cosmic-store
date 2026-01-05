@@ -162,19 +162,24 @@ pub fn generic_search<
             });
         }
         SearchSortMode::BestWaylandSupport => {
+            // Pre-compute all wayland risk levels to avoid repeated file I/O during sorting
+            use std::collections::HashMap;
+            let risk_cache: HashMap<crate::app_id::AppId, _> = results
+                .par_iter()
+                .map(|result| {
+                    let risk = app_stats
+                        .get(&result.id)
+                        .and_then(|(_, c)| c.as_ref())
+                        .map(|c| c.risk_level)
+                        .or_else(|| result.info.wayland_compat_lazy().map(|c| c.risk_level))
+                        .unwrap_or(RiskLevel::Critical);
+                    (result.id.clone(), risk)
+                })
+                .collect();
+
             results.par_sort_unstable_by(|a, b| {
-                let a_risk = app_stats
-                    .get(&a.id)
-                    .and_then(|(_, c): &(_, _)| c.as_ref())
-                    .map(|c| c.risk_level)
-                    .or_else(|| a.info.wayland_compat_lazy().map(|c| c.risk_level))
-                    .unwrap_or(RiskLevel::Critical);
-                let b_risk = app_stats
-                    .get(&b.id)
-                    .and_then(|(_, c): &(_, _)| c.as_ref())
-                    .map(|c| c.risk_level)
-                    .or_else(|| b.info.wayland_compat_lazy().map(|c| c.risk_level))
-                    .unwrap_or(RiskLevel::Critical);
+                let a_risk = risk_cache.get(&a.id).copied().unwrap_or(RiskLevel::Critical);
+                let b_risk = risk_cache.get(&b.id).copied().unwrap_or(RiskLevel::Critical);
 
                 // Lower risk level = better (Low=0, Medium=1, High=2, Critical=3)
                 let a_score = match a_risk {
@@ -199,19 +204,20 @@ pub fn generic_search<
     }
 
     // Load only enough icons to show one page of results
-    for result in results.iter_mut().take(crate::constants::MAX_RESULTS) {
+    // Use parallel iterator to avoid blocking on sequential icon I/O
+    results.par_iter_mut().take(crate::constants::MAX_RESULTS).for_each(|result| {
         let Some(backend) = backends.get(result.backend_name()) else {
-            continue;
+            return;
         };
         let appstream_caches = backend.info_caches();
         let Some(appstream_cache) = appstream_caches
             .iter()
             .find(|x| x.source_id == result.info.source_id)
         else {
-            continue;
+            return;
         };
         result.icon_opt = Some(appstream_cache.icon(&result.info));
-    }
+    });
 
     log::warn!("Search algorithm took {:?}", search_start.elapsed());
     results

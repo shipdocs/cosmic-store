@@ -1,4 +1,11 @@
+//! Message handler implementations.
+//!
+//! Each function handles a specific category of messages and is called via
+//! thin wrapper methods on the [`App`](crate::app::App) struct.
+
 use crate::app::{App, Mode};
+
+use crate::gstreamer::GStreamerExitCode;
 use crate::message::Message;
 use crate::operation::{Operation, OperationKind, RepositoryRemoveError};
 use crate::pages::{DialogPage, NavPage};
@@ -7,12 +14,506 @@ use cosmic::cosmic_config::CosmicConfigEntry;
 use cosmic::iced::futures::SinkExt;
 use cosmic::iced::keyboard::{self, Key};
 use cosmic::iced::window;
-use cosmic::iced::{Subscription, futures, stream};
+use cosmic::iced::{Size, Subscription, futures, stream};
 use cosmic::widget;
 use cosmic::{Application, action};
 use std::env;
 use std::future::pending;
 use std::process;
+
+pub fn handle_config_message(app: &mut App, message: Message) -> Task<Message> {
+    macro_rules! config_set {
+        ($name: ident, $value: expr) => {
+            match &app.config_handler {
+                Some(config_handler) => {
+                    match paste::paste! { app.config.[<set_ $name>](config_handler, $value) } {
+                        Ok(_) => {}
+                        Err(err) => {
+                            log::warn!("failed to save config {:?}: {}", stringify!($name), err);
+                        }
+                    }
+                }
+                None => {
+                    app.config.$name = $value;
+                    log::warn!(
+                        "failed to save config {:?}: no config handler",
+                        stringify!($name)
+                    );
+                }
+            }
+        };
+    }
+
+    match message {
+        Message::AppTheme(app_theme) => {
+            config_set!(app_theme, app_theme);
+            app.update_config()
+        }
+        Message::Config(config) => {
+            if config != app.config {
+                log::info!("update config");
+                app.config = config;
+                app.update_config()
+            } else {
+                Task::none()
+            }
+        }
+        Message::SystemThemeModeChange(_theme_mode) => app.update_config(),
+        _ => Task::none(),
+    }
+}
+
+pub fn handle_search_message(app: &mut App, message: Message) -> Task<Message> {
+    match message {
+        Message::CategoryResults(categories, mut results) => {
+            app.load_icons_for_results(&mut results);
+            app.category_results = Some((categories, results));
+            app.update_scroll()
+        }
+        Message::SearchActivate => {
+            app.search_active = true;
+            widget::text_input::focus(app.search_id.clone())
+        }
+        Message::SearchClear => {
+            app.search_active = false;
+            app.search_input.clear();
+            if app.search_results.take().is_some() {
+                app.update_scroll()
+            } else {
+                Task::none()
+            }
+        }
+        Message::SearchInput(input) => {
+            if input != app.search_input {
+                app.search_input = input;
+                if !app.search_input.is_empty() {
+                    app.search()
+                } else {
+                    Task::none()
+                }
+            } else {
+                Task::none()
+            }
+        }
+        Message::SearchResults(input, mut results, auto_select) => {
+            if input == app.search_input {
+                app.load_icons_for_results(&mut results);
+
+                app.details_page_opt = None;
+                if auto_select && results.len() == 1 {
+                    let _ = app.select(
+                        results[0].backend_name(),
+                        results[0].id.clone(),
+                        results[0].icon_opt.clone(),
+                        results[0].info.clone(),
+                    );
+                }
+                let mut tasks = Vec::with_capacity(2);
+                match &mut app.mode {
+                    Mode::Normal => {}
+                    Mode::GStreamer { selected, .. } => {
+                        selected.clear();
+                        if results.is_empty() {
+                            return handle_search_message(
+                                app,
+                                Message::GStreamerExit(GStreamerExitCode::NotFound),
+                            );
+                        }
+                        for (i, result) in results.iter().enumerate() {
+                            if App::is_installed_inner(
+                                &app.installed,
+                                result.backend_name(),
+                                &result.id,
+                                &result.info,
+                            ) {
+                                selected.insert(i);
+                            }
+                        }
+                        if app.core.main_window_id().is_none() {
+                            let size = Size::new(640.0, 464.0);
+                            let mut settings = window::Settings {
+                                decorations: false,
+                                exit_on_close_request: false,
+                                min_size: Some(size),
+                                resizable: true,
+                                size,
+                                transparent: true,
+                                ..Default::default()
+                            };
+                            #[cfg(target_os = "linux")]
+                            {
+                                settings.platform_specific.application_id =
+                                    "com.system76.CosmicStoreDialog".to_string();
+                            }
+                            let (window_id, task) = window::open(settings);
+                            app.core.set_main_window_id(Some(window_id));
+                            tasks.push(task.map(|_id| action::none()));
+                        }
+                    }
+                }
+                app.search_results = Some((input, results));
+                tasks.push(app.update_scroll());
+                Task::batch(tasks)
+            } else {
+                log::warn!(
+                    "received {} results for {:?} after search changed to {:?}",
+                    results.len(),
+                    input,
+                    app.search_input
+                );
+                Task::none()
+            }
+        }
+        Message::SearchSubmit(_search_input) => {
+            if !app.search_input.is_empty() {
+                app.search()
+            } else {
+                Task::none()
+            }
+        }
+        Message::SearchSortMode(sort_mode) => {
+            app.search_sort_mode = sort_mode;
+            if !app.search_input.is_empty() {
+                app.search()
+            } else {
+                Task::none()
+            }
+        }
+        Message::WaylandFilter(filter) => {
+            app.wayland_filter = filter;
+            if !app.search_input.is_empty() {
+                app.search()
+            } else {
+                Task::none()
+            }
+        }
+        Message::GStreamerExit(_) => update(app, message),
+        _ => Task::none(),
+    }
+}
+
+pub fn handle_backend_message(app: &mut App, message: Message) -> Task<Message> {
+    match message {
+        Message::Backends(backends) => {
+            app.backends = backends;
+            app.repos_changing.clear();
+            let mut tasks = Vec::with_capacity(2);
+            tasks.push(app.update_installed());
+            match app.mode {
+                Mode::Normal => {
+                    tasks.push(app.update_updates());
+                }
+                Mode::GStreamer { .. } => {}
+            }
+            Task::batch(tasks)
+        }
+        Message::CheckUpdates => app.update_updates(),
+        Message::UpdateAll => {
+            let ops: Vec<_> = app
+                .updates
+                .as_ref()
+                .map(|updates| {
+                    updates
+                        .iter()
+                        .map(|(backend_name, package)| Operation {
+                            kind: OperationKind::Update,
+                            backend_name,
+                            package_ids: vec![package.id.clone()],
+                            infos: vec![package.info.clone()],
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+            for op in ops {
+                app.operation(op);
+            }
+            Task::none()
+        }
+        Message::Updates(updates) => {
+            app.updates = Some(updates);
+            Task::none()
+        }
+        Message::StatsLoaded((downloads, compatibility)) => {
+            log::info!(
+                "Received {} downloads, {} compatibility entries",
+                downloads.len(),
+                compatibility.len()
+            );
+            for (id, count) in downloads {
+                app.app_stats.entry(id).or_insert((0, None)).0 = count;
+            }
+            for (id, compat) in compatibility {
+                app.app_stats.entry(id).or_insert((0, None)).1 = Some(compat);
+            }
+
+            let mut commands = Vec::new();
+            if app.search_active && app.details_page_opt.is_none() {
+                commands.push(app.search());
+            }
+
+            Task::batch(commands)
+        }
+        _ => Task::none(),
+    }
+}
+
+pub fn handle_dialog_message(app: &mut App, message: Message) -> Task<Message> {
+    match message {
+        Message::DialogCancel => {
+            app.dialog_pages.pop_front();
+        }
+        Message::DialogConfirm => {
+            if let Some(page) = app.dialog_pages.pop_front() {
+                match page {
+                    DialogPage::RepositoryRemove(backend_name, repo_rm) => {
+                        app.operation(Operation {
+                            kind: OperationKind::RepositoryRemove(repo_rm.rms, false),
+                            backend_name,
+                            package_ids: Vec::new(),
+                            infos: Vec::new(),
+                        });
+                    }
+                    DialogPage::Uninstall(backend_name, id, info) => {
+                        app.operation(Operation {
+                            kind: OperationKind::Uninstall {
+                                purge_data: app.uninstall_purge_data,
+                            },
+                            backend_name,
+                            package_ids: vec![id],
+                            infos: vec![info],
+                        });
+                    }
+                    _ => {}
+                }
+            }
+        }
+        Message::DialogPage(page) => {
+            app.dialog_pages.push_back(page);
+        }
+        _ => {}
+    }
+    Task::none()
+}
+
+pub fn handle_operation_message(app: &mut App, message: Message) -> Task<Message> {
+    match message {
+        Message::Operation(kind, backend_name, package_id, info) => {
+            app.operation(Operation {
+                kind,
+                backend_name,
+                package_ids: vec![package_id],
+                infos: vec![info],
+            });
+            Task::none()
+        }
+        Message::PendingComplete(id) => {
+            if let Some((op, _)) = app.pending_operations.remove(&id) {
+                app.progress_operations.remove(&id);
+                match &op.kind {
+                    OperationKind::RepositoryAdd(_) | OperationKind::RepositoryRemove(_, _) => {
+                        app.repos_changing
+                            .retain(|(backend_name, _repo_id, _)| backend_name != &op.backend_name);
+                        return app.update_backends(true);
+                    }
+                    _ => {
+                        return Task::batch(vec![app.update_installed(), app.update_updates()]);
+                    }
+                }
+            }
+            Task::none()
+        }
+        Message::PendingError(id, _err) => {
+            app.progress_operations.remove(&id);
+            if let Some((op, _)) = app.pending_operations.remove(&id) {
+                match &op.kind {
+                    OperationKind::RepositoryAdd(_) | OperationKind::RepositoryRemove(_, _) => {
+                        app.repos_changing
+                            .retain(|(backend_name, _, _)| backend_name != &op.backend_name);
+                    }
+                    _ => {}
+                }
+            }
+            app.dialog_pages.push_back(DialogPage::FailedOperation(id));
+            Task::none()
+        }
+        Message::PendingProgress(id, progress) => {
+            if let Some((_, p)) = app.pending_operations.get_mut(&id) {
+                *p = progress;
+            }
+            Task::none()
+        }
+        Message::RepositoryAdd(backend_name, repo_add) => {
+            app.operation(Operation {
+                kind: OperationKind::RepositoryAdd(repo_add),
+                backend_name,
+                package_ids: Vec::new(),
+                infos: Vec::new(),
+            });
+            Task::none()
+        }
+        Message::RepositoryAddDialog(_backend_name) => Task::none(),
+        _ => Task::none(),
+    }
+}
+
+pub fn handle_selection_message(app: &mut App, message: Message) -> Task<Message> {
+    match message {
+        Message::Select(backend_name, id, icon, info) => app.select(backend_name, id, icon, info),
+        Message::SelectInstalled(result_i) => {
+            if let Some(results) = &app.installed_results {
+                match results.get(result_i) {
+                    Some(result) => app.select(
+                        result.backend_name(),
+                        result.id.clone(),
+                        result.icon_opt.clone(),
+                        result.info.clone(),
+                    ),
+                    None => {
+                        log::error!("failed to find installed result with index {}", result_i);
+                        Task::none()
+                    }
+                }
+            } else {
+                Task::none()
+            }
+        }
+        Message::SelectUpdates(updates_i) => {
+            if let Some(updates) = &app.updates {
+                match updates
+                    .get(updates_i)
+                    .map(|(backend_name, package)| (backend_name, package.clone()))
+                {
+                    Some((backend_name, package)) => {
+                        app.select(backend_name, package.id, Some(package.icon), package.info)
+                    }
+                    None => {
+                        log::error!("failed to find updates package with index {}", updates_i);
+                        Task::none()
+                    }
+                }
+            } else {
+                Task::none()
+            }
+        }
+        Message::SelectNone => {
+            app.details_page_opt = None;
+            app.update_scroll()
+        }
+        Message::SelectCategoryResult(result_i) => {
+            if let Some((_, results)) = &app.category_results {
+                match results.get(result_i) {
+                    Some(result) => app.select(
+                        result.backend_name(),
+                        result.id.clone(),
+                        result.icon_opt.clone(),
+                        result.info.clone(),
+                    ),
+                    None => {
+                        log::error!("failed to find category result with index {}", result_i);
+                        Task::none()
+                    }
+                }
+            } else {
+                Task::none()
+            }
+        }
+        Message::SelectExploreResult(explore_page, result_i) => {
+            if let Some(results) = app.explore_results.get(&explore_page) {
+                match results.get(result_i) {
+                    Some(result) => app.select(
+                        result.backend_name(),
+                        result.id.clone(),
+                        result.icon_opt.clone(),
+                        result.info.clone(),
+                    ),
+                    None => {
+                        log::error!(
+                            "failed to find {:?} result with index {}",
+                            explore_page,
+                            result_i
+                        );
+                        Task::none()
+                    }
+                }
+            } else {
+                Task::none()
+            }
+        }
+        Message::SelectSearchResult(result_i) => {
+            if let Some((_input, results)) = &app.search_results {
+                match results.get(result_i) {
+                    Some(result) => app.select(
+                        result.backend_name(),
+                        result.id.clone(),
+                        result.icon_opt.clone(),
+                        result.info.clone(),
+                    ),
+                    None => {
+                        log::error!("failed to find search result with index {}", result_i);
+                        Task::none()
+                    }
+                }
+            } else {
+                Task::none()
+            }
+        }
+        Message::SelectedAddonsViewMore(_)
+        | Message::SelectedScreenshot(_, _, _)
+        | Message::SelectedScreenshotShown(_) => {
+            if let Some(details_page) = &mut app.details_page_opt {
+                details_page.update(&message)
+            } else {
+                Task::none()
+            }
+        }
+
+        Message::SelectedSource(i) => {
+            let mut next_ids = None;
+            if let Some(selected) = &app.details_page_opt {
+                if let Some(source) = selected.sources.get(i) {
+                    next_ids = Some((
+                        source.backend_name,
+                        source.source_id.clone(),
+                        selected.id.clone(),
+                    ));
+                }
+            }
+            if let Some((backend_name, source_id, id)) = next_ids {
+                if let Some(backend) = app.backends.get(backend_name) {
+                    for appstream_cache in backend.info_caches() {
+                        if appstream_cache.source_id == source_id {
+                            if let Some(info) = appstream_cache.infos.get(&id) {
+                                return app.select(
+                                    backend_name,
+                                    id,
+                                    Some(appstream_cache.icon(info)),
+                                    info.clone(),
+                                );
+                            }
+                        }
+                    }
+                }
+                if let Some(installed) = &app.installed {
+                    for (installed_backend_name, package) in installed {
+                        if installed_backend_name == &backend_name
+                            && package.info.source_id == source_id
+                            && package.id == id
+                        {
+                            return app.select(
+                                backend_name,
+                                id,
+                                Some(package.icon.clone()),
+                                package.info.clone(),
+                            );
+                        }
+                    }
+                }
+            }
+            Task::none()
+        }
+        _ => Task::none(),
+    }
+}
 
 pub fn update(app: &mut App, message: Message) -> Task<Message> {
     match message {

@@ -24,6 +24,9 @@ use std::{
 
 use crate::{AppIcon, AppId, AppInfo, app_info::WaylandCompatibility, stats};
 
+#[cfg(test)]
+mod appstream_tests;
+
 type ParsedData = (Option<String>, Vec<(AppId, Arc<AppInfo>)>, Vec<Component>);
 
 /// Extract Wayland compatibility bitcode from AppStream XML custom fields.
@@ -68,30 +71,6 @@ fn extract_wayland_bitcode(element: &xmltree::Element) -> Option<WaylandCompatib
     }
 
     None
-}
-
-/// Sanitize category elements by stripping trailing punctuation.
-///
-/// Some upstream AppStream data has malformed categories with trailing
-/// semicolons (e.g., "AudioVideo;") which fail to parse. This function
-/// preprocesses the XML element to clean up such issues.
-fn sanitize_categories(element: &mut xmltree::Element) {
-    if let Some(categories_elem) = element.get_mut_child("categories") {
-        for node in categories_elem.children.iter_mut() {
-            if let xmltree::XMLNode::Element(category_elem) = node {
-                if category_elem.name == "category" {
-                    for child in category_elem.children.iter_mut() {
-                        if let xmltree::XMLNode::Text(text) = child {
-                            // Strip trailing punctuation
-                            *text = text
-                                .trim_end_matches(|c: char| c.is_ascii_punctuation())
-                                .to_string();
-                        }
-                    }
-                }
-            }
-        }
-    }
 }
 
 const PREFIXES: &[&str] = &["/usr/share", "/var/lib", "/var/cache"];
@@ -423,120 +402,6 @@ impl AppstreamCache {
         log::info!("saved cache {:?} in {:?}", cache_name, duration);
     }
 
-    /// Reload from original package sources
-    pub fn load_original(&mut self) {
-        self.infos.clear();
-        self.pkgnames.clear();
-        self.addons.clear();
-
-        let path_results: Vec<_> = self
-            .path_tags
-            .par_iter()
-            .filter_map(|(path, _tag)| -> Option<ParsedData> {
-                let file_name = match Path::new(path).file_name() {
-                    Some(file_name_os) => match file_name_os.to_str() {
-                        Some(some) => some,
-                        None => {
-                            log::error!("failed to convert to UTF-8: {:?}", file_name_os);
-                            return None;
-                        }
-                    },
-                    None => {
-                        log::error!("path has no file name: {:?}", path);
-                        return None;
-                    }
-                };
-
-                //TODO: memory map?
-                let mut file = match fs::File::open(path) {
-                    Ok(ok) => ok,
-                    Err(err) => {
-                        log::error!("failed to open {:?}: {}", path, err);
-                        return None;
-                    }
-                };
-
-                if file_name.ends_with(".xml.gz") {
-                    let mut gz = GzDecoder::new(&mut file);
-                    match self.parse_xml(path, &mut gz) {
-                        Ok(ok) => Some(ok),
-                        Err(err) => {
-                            log::error!("failed to parse {:?}: {}", path, err);
-                            None
-                        }
-                    }
-                } else if file_name.ends_with(".yml.gz") {
-                    let mut gz = GzDecoder::new(&mut file);
-                    match self.parse_yaml(path, &mut gz) {
-                        Ok(ok) => Some(ok),
-                        Err(err) => {
-                            log::error!("failed to parse {:?}: {}", path, err);
-                            None
-                        }
-                    }
-                } else if file_name.ends_with(".xml") {
-                    match self.parse_xml(path, &mut file) {
-                        Ok(ok) => Some(ok),
-                        Err(err) => {
-                            log::error!("failed to parse {:?}: {}", path, err);
-                            None
-                        }
-                    }
-                } else if file_name.ends_with(".yml") {
-                    match self.parse_yaml(path, &mut file) {
-                        Ok(ok) => Some(ok),
-                        Err(err) => {
-                            log::error!("failed to parse {:?}: {}", path, err);
-                            None
-                        }
-                    }
-                } else {
-                    log::error!("unknown appstream file type: {:?}", path);
-                    None
-                }
-            })
-            .collect();
-
-        for (origin_opt, infos, addons) in path_results {
-            for (id, info) in infos {
-                for pkgname in &info.pkgnames {
-                    self.pkgnames
-                        .entry(pkgname.clone())
-                        .or_default()
-                        .insert(id.clone());
-                }
-                if let Some(_old) = self.infos.insert(id.clone(), info) {
-                    //TODO: merge based on priority
-                    log::debug!("found duplicate info {:?}", id);
-                }
-            }
-
-            for addon in addons {
-                let id = AppId::new(&addon.id.0);
-                for extend_id in addon.extends.iter() {
-                    self.addons
-                        .entry(AppId::new(&extend_id.0))
-                        .or_default()
-                        .push(id.clone());
-                }
-                let addon_info = Arc::new(AppInfo::new(
-                    &self.source_id,
-                    &self.source_name,
-                    origin_opt.as_deref(),
-                    addon,
-                    &self.locale,
-                    stats::try_monthly_downloads(&id).unwrap_or(0),
-                    false,
-                    stats::try_wayland_compatibility(&id),
-                ));
-                if let Some(_old) = self.infos.insert(id.clone(), addon_info) {
-                    //TODO: merge based on priority
-                    log::debug!("found duplicate info {:?}", id);
-                }
-            }
-        }
-    }
-
     /// Either load from cache or load from originals. Cache is cleaned before loading and saved after.
     pub fn reload(&mut self) {
         let source_id = self.source_id.clone();
@@ -720,16 +585,131 @@ impl AppstreamCache {
                 .handle()
         })
     }
+    pub fn load_original(&mut self) {
+        self.infos.clear();
+        self.pkgnames.clear();
+        self.addons.clear();
 
-    fn parse_xml<P: AsRef<Path>, R: Read>(
+        let path_results: Vec<_> = self
+            .path_tags
+            .par_iter()
+            .filter_map(|(path, _tag)| -> Option<ParsedData> {
+                let file_name = match Path::new(path).file_name() {
+                    Some(file_name_os) => match file_name_os.to_str() {
+                        Some(some) => some,
+                        None => {
+                            log::error!("failed to convert to UTF-8: {:?}", file_name_os);
+                            return None;
+                        }
+                    },
+                    None => {
+                        log::error!("path has no file name: {:?}", path);
+                        return None;
+                    }
+                };
+
+                let mut file = match fs::File::open(path) {
+                    Ok(ok) => ok,
+                    Err(err) => {
+                        log::error!("failed to open {:?}: {}", path, err);
+                        return None;
+                    }
+                };
+
+                // Decompress or read into a buffer first to avoid stream bottlenecks
+                let buffer = if file_name.ends_with(".gz") {
+                    let mut gz = GzDecoder::new(&mut file);
+                    let mut buffer = Vec::new();
+                    match gz.read_to_end(&mut buffer) {
+                        Ok(_) => buffer,
+                        Err(err) => {
+                            log::error!("failed to decompress {:?}: {}", path, err);
+                            return None;
+                        }
+                    }
+                } else {
+                    let mut buffer = Vec::new();
+                    match file.read_to_end(&mut buffer) {
+                        Ok(_) => buffer,
+                        Err(err) => {
+                            log::error!("failed to read {:?}: {}", path, err);
+                            return None;
+                        }
+                    }
+                };
+
+                if file_name.ends_with(".xml") || file_name.ends_with(".xml.gz") {
+                    match self.parse_xml(path, &buffer) {
+                        Ok(ok) => Some(ok),
+                        Err(err) => {
+                            log::error!("failed to parse {:?}: {}", path, err);
+                            None
+                        }
+                    }
+                } else if file_name.ends_with(".yml") || file_name.ends_with(".yml.gz") {
+                    match self.parse_yaml(path, &buffer) {
+                        Ok(ok) => Some(ok),
+                        Err(err) => {
+                            log::error!("failed to parse {:?}: {}", path, err);
+                            None
+                        }
+                    }
+                } else {
+                    log::error!("unknown appstream file type: {:?}", path);
+                    None
+                }
+            })
+            .collect();
+
+        for (origin_opt, infos, addons) in path_results {
+            for (id, info) in infos {
+                for pkgname in &info.pkgnames {
+                    self.pkgnames
+                        .entry(pkgname.clone())
+                        .or_default()
+                        .insert(id.clone());
+                }
+                if let Some(_old) = self.infos.insert(id.clone(), info) {
+                    //TODO: merge based on priority
+                    log::debug!("found duplicate info {:?}", id);
+                }
+            }
+
+            for addon in addons {
+                let id = AppId::new(&addon.id.0);
+                for extend_id in addon.extends.iter() {
+                    self.addons
+                        .entry(AppId::new(&extend_id.0))
+                        .or_default()
+                        .push(id.clone());
+                }
+                let addon_info = Arc::new(AppInfo::new(
+                    &self.source_id,
+                    &self.source_name,
+                    origin_opt.as_deref(),
+                    addon,
+                    &self.locale,
+                    stats::try_monthly_downloads(&id).unwrap_or(0),
+                    false,
+                    stats::try_wayland_compatibility(&id),
+                ));
+                if let Some(_old) = self.infos.insert(id.clone(), addon_info) {
+                    //TODO: merge based on priority
+                    log::debug!("found duplicate info {:?}", id);
+                }
+            }
+        }
+    }
+
+    fn parse_xml<P: AsRef<Path>>(
         &self,
         path: P,
-        reader: R,
+        buffer: &[u8],
     ) -> Result<ParsedData, Box<dyn Error>> {
         let start = Instant::now();
         let path = path.as_ref();
         //TODO: just running this and not saving the results makes a huge memory leak!
-        let e = xmltree::Element::parse(reader)?;
+        let e = xmltree::Element::parse(buffer)?;
         let _version = e
             .attributes
             .get("version")
@@ -746,11 +726,7 @@ impl AppstreamCache {
                         // Extract wayland_compat from custom fields before converting to Component
                         let wayland_compat_from_xml = extract_wayland_bitcode(e);
 
-                        // Clone and sanitize the element to fix malformed upstream data
-                        let mut sanitized_element = e.clone();
-                        sanitize_categories(&mut sanitized_element);
-
-                        match Component::try_from(&sanitized_element) {
+                        match Component::try_from(e) {
                             Ok(component) => {
                                 match component.kind {
                                     ComponentKind::DesktopApplication => {}
@@ -817,29 +793,44 @@ impl AppstreamCache {
         Ok((origin_opt.cloned(), infos, addons.into_inner().unwrap()))
     }
 
-    fn parse_yaml<P: AsRef<Path>, R: Read>(
+    fn parse_yaml<P: AsRef<Path>>(
         &self,
         path: P,
-        reader: R,
+        buffer: &[u8],
     ) -> Result<ParsedData, Box<dyn Error>> {
         let start = Instant::now();
         let path = path.as_ref();
-        let mut origin_opt = None;
-        let mut media_base_url_opt = None;
-        let mut infos = Vec::new();
-        //TODO: par_iter?
-        for (doc_i, doc) in serde_yaml::Deserializer::from_reader(reader).enumerate() {
-            let value = match serde_yaml::Value::deserialize(doc) {
-                Ok(ok) => ok,
-                Err(err) => {
-                    log::error!("failed to parse document {} in {:?}: {}", doc_i, path, err);
-                    continue;
-                }
-            };
-            if doc_i == 0 {
-                origin_opt = value["Origin"].as_str().map(|x| x.to_string());
-                media_base_url_opt = value["MediaBaseUrl"].as_str().map(|x| x.to_string());
-            } else {
+
+        // Convert buffer to string once
+        let yaml_str = match std::str::from_utf8(buffer) {
+            Ok(s) => s,
+            Err(e) => return Err(Box::new(e)),
+        };
+
+        // Parse all documents sequentially first - this is fast for structure
+        let documents: Vec<serde_yaml::Value> = serde_yaml::Deserializer::from_str(yaml_str)
+            .map(serde_yaml::Value::deserialize)
+            .collect::<Result<Vec<_>, _>>()?;
+
+        if documents.is_empty() {
+            return Ok((None, Vec::new(), Vec::new()));
+        }
+
+        // Extract header info from the first document
+        let origin_opt = documents
+            .first()
+            .and_then(|v| v["Origin"].as_str())
+            .map(|x| x.to_string());
+
+        let media_base_url_opt = documents
+            .first()
+            .and_then(|v| v["MediaBaseUrl"].as_str())
+            .map(|x| x.to_string());
+
+        // Parallel process the rest
+        let infos: Vec<_> = documents[1..]
+            .par_iter()
+            .filter_map(|value| {
                 // Sanitize categories in YAML before deserialization
                 let mut sanitized_value = value.clone();
                 if let Some(categories) = sanitized_value.get_mut("Categories") {
@@ -859,7 +850,7 @@ impl AppstreamCache {
                         if component.kind != ComponentKind::DesktopApplication {
                             // Skip anything that is not a desktop application
                             //TODO: should we allow more components?
-                            continue;
+                            return None;
                         }
 
                         //TODO: move to appstream crate
@@ -1012,33 +1003,52 @@ impl AppstreamCache {
                                             );
                                         }
                                     },
+                                    Some("binaries") => match provide.as_sequence() {
+                                        Some(sequence) => {
+                                            for binary in sequence {
+                                                match binary.as_str() {
+                                                    Some(binary) => {
+                                                        component.provides.push(Provide::Binary(
+                                                            binary.to_string(),
+                                                        ));
+                                                    }
+                                                    None => {
+                                                        log::warn!(
+                                                            "unsupported binary provide {:?} for {:?} in {:?}",
+                                                            binary,
+                                                            component.id,
+                                                            path
+                                                        );
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        None => {
+                                            log::warn!(
+                                                "binaries provide value is not a sequence in {:?}",
+                                                path
+                                            );
+                                        }
+                                    },
                                     Some("mediatypes") => match provide.as_sequence() {
                                         Some(sequence) => {
                                             for mediatype in sequence {
-                                                if let Some(mediatype) = mediatype.as_str() {
-                                                    component.provides.push(Provide::MediaType(
-                                                        mediatype.to_string(),
-                                                    ));
-                                                } else if let Some(sequence) =
-                                                    mediatype.as_sequence()
-                                                {
-                                                    for mediatype in sequence {
-                                                        if let Some(mediatype) = mediatype.as_str()
-                                                        {
-                                                            component.provides.push(
-                                                                Provide::MediaType(
-                                                                    mediatype.to_string(),
-                                                                ),
-                                                            );
-                                                        }
+                                                match mediatype.as_str() {
+                                                    Some(mediatype) => {
+                                                        component.provides.push(
+                                                            Provide::MediaType(
+                                                                mediatype.to_string(),
+                                                            ),
+                                                        );
                                                     }
-                                                } else {
-                                                    log::warn!(
-                                                        "unsupported mediatypes provide {:?} for {:?} in {:?}",
-                                                        mediatype,
-                                                        component.id,
-                                                        path
-                                                    );
+                                                    None => {
+                                                        log::warn!(
+                                                            "unsupported mediatype provide {:?} for {:?} in {:?}",
+                                                            mediatype,
+                                                            component.id,
+                                                            path
+                                                        );
+                                                    }
                                                 }
                                             }
                                         }
@@ -1053,69 +1063,28 @@ impl AppstreamCache {
                                     Some("mimetypes") => match provide.as_sequence() {
                                         Some(sequence) => {
                                             for mediatype in sequence {
-                                                if let Some(mediatype) = mediatype.as_str() {
-                                                    component.provides.push(Provide::MediaType(
-                                                        mediatype.to_string(),
-                                                    ));
-                                                } else if let Some(sequence) =
-                                                    mediatype.as_sequence()
-                                                {
-                                                    for mediatype in sequence {
-                                                        if let Some(mediatype) = mediatype.as_str()
-                                                        {
-                                                            component.provides.push(
-                                                                Provide::MediaType(
-                                                                    mediatype.to_string(),
-                                                                ),
-                                                            );
-                                                        }
+                                                match mediatype.as_str() {
+                                                    Some(mediatype) => {
+                                                        component.provides.push(
+                                                            Provide::MediaType(
+                                                                mediatype.to_string(),
+                                                            ),
+                                                        );
                                                     }
-                                                } else {
-                                                    log::warn!(
-                                                        "unsupported mimetypes provide {:?} for {:?} in {:?}",
-                                                        mediatype,
-                                                        component.id,
-                                                        path
-                                                    );
+                                                    None => {
+                                                        log::warn!(
+                                                            "unsupported mediatype provide {:?} for {:?} in {:?}",
+                                                            mediatype,
+                                                            component.id,
+                                                            path
+                                                        );
+                                                    }
                                                 }
                                             }
                                         }
                                         None => {
                                             log::warn!(
                                                 "mimetypes provide value is not a sequence in {:?}",
-                                                path
-                                            );
-                                        }
-                                    },
-                                    Some("binaries") => match provide.as_sequence() {
-                                        Some(sequence) => {
-                                            for binary in sequence {
-                                                if let Some(binary) = binary.as_str() {
-                                                    component
-                                                        .provides
-                                                        .push(Provide::Binary(binary.to_string()));
-                                                } else if let Some(sequence) = binary.as_sequence()
-                                                {
-                                                    for binary in sequence {
-                                                        if let Some(binary) = binary.as_str() {
-                                                            component.provides.push(
-                                                                Provide::Binary(binary.to_string()),
-                                                            );
-                                                        }
-                                                    }
-                                                } else {
-                                                    log::warn!(
-                                                        "unsupported binaries provide {:?} for {:?} in {:?}",
-                                                        binary,
-                                                        component.id,
-                                                        path
-                                                    );
-                                                }
-                                            }
-                                        }
-                                        None => {
-                                            log::warn!(
-                                                "binaries provide value is not a sequence in {:?}",
                                                 path
                                             );
                                         }
@@ -1263,7 +1232,7 @@ impl AppstreamCache {
                                         Ok(ok) => ok,
                                         Err(err) => {
                                             log::warn!(
-                                                "failed to parse url {:?} for {:?} in {:?}: {}",
+                                                "failed to parse {:?} for {:?} in {:?}: {}",
                                                 url_str,
                                                 component.id,
                                                 path,
@@ -1336,7 +1305,7 @@ impl AppstreamCache {
                             );
                         }
 
-                        infos.push((
+                        Some((
                             id,
                             Arc::new(AppInfo::new(
                                 &self.source_id,
@@ -1348,14 +1317,15 @@ impl AppstreamCache {
                                 false,
                                 wayland_compat,
                             )),
-                        ));
+                        ))
                     }
                     Err(err) => {
                         log::error!("failed to parse {:?} in {:?}: {}", value["ID"], path, err);
+                        None
                     }
                 }
-            }
-        }
+            })
+            .collect();
         let duration = start.elapsed();
         log::info!(
             "loaded {} items from {:?} in {:?}",
@@ -1371,7 +1341,6 @@ impl AppstreamCache {
 mod wayland_bitcode_tests {
     use super::*;
     use crate::app_info::{AppFramework, RiskLevel, WaylandSupport};
-    use std::io::Cursor;
 
     #[test]
     fn test_extract_wayland_bitcode() {
@@ -1484,7 +1453,7 @@ mod wayland_bitcode_tests {
             ..Default::default()
         };
 
-        let result = cache.parse_xml("test.xml", Cursor::new(xml));
+        let result = cache.parse_xml("test.xml", xml.as_bytes());
         assert!(result.is_ok());
 
         let (_origin, infos, _addons) = result.unwrap();
@@ -1523,7 +1492,9 @@ mod wayland_bitcode_tests {
         }
 
         let file = file.unwrap();
-        let reader = BufReader::new(file);
+        let mut reader = BufReader::new(file);
+        let mut buffer = Vec::new();
+        reader.read_to_end(&mut buffer).unwrap();
 
         let cache = AppstreamCache {
             source_id: "test".to_string(),
@@ -1531,7 +1502,7 @@ mod wayland_bitcode_tests {
             ..Default::default()
         };
 
-        let result = cache.parse_xml("mock-appstream-wayland.xml", reader);
+        let result = cache.parse_xml("mock-appstream-wayland.xml", &buffer);
         assert!(result.is_ok(), "Failed to parse mock AppStream file");
 
         let (_origin, infos, _addons) = result.unwrap();

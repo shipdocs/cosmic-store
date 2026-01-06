@@ -178,8 +178,14 @@ pub fn generic_search<
                 .collect();
 
             results.par_sort_unstable_by(|a, b| {
-                let a_risk = risk_cache.get(&a.id).copied().unwrap_or(RiskLevel::Critical);
-                let b_risk = risk_cache.get(&b.id).copied().unwrap_or(RiskLevel::Critical);
+                let a_risk = risk_cache
+                    .get(&a.id)
+                    .copied()
+                    .unwrap_or(RiskLevel::Critical);
+                let b_risk = risk_cache
+                    .get(&b.id)
+                    .copied()
+                    .unwrap_or(RiskLevel::Critical);
 
                 // Lower risk level = better (Low=0, Medium=1, High=2, Critical=3)
                 let a_score = match a_risk {
@@ -526,7 +532,6 @@ pub fn installed_results_data(
     )
 }
 
-
 /// Calculate weight for a single explore page result
 fn calculate_explore_weight(
     id: &crate::app_id::AppId,
@@ -536,12 +541,10 @@ fn calculate_explore_weight(
     now: i64,
 ) -> Option<i64> {
     match explore_page {
-        ExplorePage::EditorsChoice => {
-            EDITORS_CHOICE
-                .iter()
-                .position(|choice_id| choice_id == &id.normalized())
-                .map(|x| x as i64)
-        }
+        ExplorePage::EditorsChoice => EDITORS_CHOICE
+            .iter()
+            .position(|choice_id| choice_id == &id.normalized())
+            .map(|x| x as i64),
         ExplorePage::PopularApps => {
             if !matches!(info.kind, AppKind::DesktopApplication) {
                 return None;
@@ -589,7 +592,11 @@ fn calculate_explore_weight(
             if categories.is_empty() {
                 return None;
             }
-            if info.categories.iter().any(|x| categories.iter().any(|c| x == c.id())) {
+            if info
+                .categories
+                .iter()
+                .any(|x| categories.iter().any(|c| x == c.id()))
+            {
                 Some(-(downloads as i64))
             } else {
                 None
@@ -611,27 +618,28 @@ pub fn explore_results_all(
     now: i64,
 ) -> std::collections::HashMap<ExplorePage, Vec<SearchResult>> {
     use std::collections::HashMap;
-    
+
     let mut results_map: HashMap<ExplorePage, Vec<SearchResult>> = HashMap::new();
-    
+
     // Initialize empty result vectors for all explore pages
     for page in ExplorePage::all().iter() {
         results_map.insert(*page, Vec::new());
     }
-    
+
     // Single pass over all apps
     for (id, infos) in apps.iter() {
         let (stats_downloads, _stats_compat) = app_stats.get(id).cloned().unwrap_or((0, None));
-        
+
         // Use first info as it is preferred
         let Some(AppEntry {
             backend_name,
             info,
             installed: _,
-        }) = infos.first() else {
+        }) = infos.first()
+        else {
             continue;
         };
-        
+
         // Check origin filter for non-flatpak apps
         let is_flatpak = backend_name.starts_with("flatpak-");
         if !is_flatpak {
@@ -641,37 +649,31 @@ pub fn explore_results_all(
                 }
             }
         }
-        
+
         let downloads = stats_downloads;
-        
+
         // Check all explore pages for this app
         for explore_page in ExplorePage::all().iter() {
             // Calculate weight for this explore page
-            if let Some(weight) = calculate_explore_weight(id, info, *explore_page, downloads, now) {
-                let result = SearchResult::new(
-                    backend_name,
-                    id.clone(),
-                    None,
-                    info.clone(),
-                    weight,
-                );
+            if let Some(weight) = calculate_explore_weight(id, info, *explore_page, downloads, now)
+            {
+                let result =
+                    SearchResult::new(backend_name, id.clone(), None, info.clone(), weight);
                 results_map.get_mut(explore_page).unwrap().push(result);
             }
         }
     }
-    
+
     // Sort each explore page's results
     for (_page, results) in results_map.iter_mut() {
         results.par_sort_unstable_by(|a, b| match a.weight.cmp(&b.weight) {
             cmp::Ordering::Equal => match LANGUAGE_SORTER.compare(&a.info.name, &b.info.name) {
-                cmp::Ordering::Equal => {
-                    LANGUAGE_SORTER.compare(a.backend_name(), b.backend_name())
-                }
+                cmp::Ordering::Equal => LANGUAGE_SORTER.compare(a.backend_name(), b.backend_name()),
                 ordering => ordering,
             },
             ordering => ordering,
         });
     }
-    
+
     results_map
 }

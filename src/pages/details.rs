@@ -8,7 +8,9 @@ use cosmic::{Element, Task, cosmic_theme, theme, widget};
 
 use crate::Message;
 use crate::app_id::AppId;
-use crate::app_info::{AppFramework, AppInfo, AppUrl, RiskLevel, WaylandSupport, WaylandCompatibility};
+use crate::app_info::{
+    AppFramework, AppInfo, AppUrl, RiskLevel, WaylandCompatibility, WaylandSupport,
+};
 use crate::constants::ICON_SIZE_DETAILS;
 use crate::fl;
 use crate::icon_cache::icon_cache_handle;
@@ -422,7 +424,6 @@ impl DetailsPage {
     }
 
     pub fn update(&mut self, message: &Message) -> Task<cosmic::Action<Message>> {
-        
         match message {
             Message::SelectedAddonsViewMore(v) => {
                 self.addons_view_more = *v;

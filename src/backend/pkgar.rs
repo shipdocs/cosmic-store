@@ -71,10 +71,7 @@ impl Backend for Pkgar {
                     None => {
                         // Ignore packages with no components
                         log::debug!("no components for package {}", package_name);
-                        system_packages.push((
-                            package_name.to_string(),
-                            String::new(),
-                        ));
+                        system_packages.push((package_name.to_string(), String::new()));
                     }
                 }
             }

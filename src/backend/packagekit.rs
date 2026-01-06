@@ -4,7 +4,13 @@ use packagekit_zbus::{
     Transaction::TransactionProxyBlocking,
     zbus::{blocking::Connection, zvariant},
 };
-use std::{collections::{HashMap, HashSet}, error::Error, fmt::Write, sync::{Arc, Mutex}, time::Instant};
+use std::{
+    collections::{HashMap, HashSet},
+    error::Error,
+    fmt::Write,
+    sync::{Arc, Mutex},
+    time::Instant,
+};
 
 use super::{Backend, Package};
 use crate::{AppId, AppInfo, AppUrl, AppstreamCache, GStreamerCodec, Operation, OperationKind};

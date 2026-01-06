@@ -1,8 +1,8 @@
 //! Badge components for displaying compatibility and status indicators
 
+use cosmic::Element;
 use cosmic::iced::Color;
 use cosmic::widget;
-use cosmic::Element;
 use std::collections::HashMap;
 
 use crate::app_id::AppId;
@@ -10,7 +10,7 @@ use crate::app_info::{AppInfo, RiskLevel, WaylandCompatibility, WaylandSupport};
 use crate::icon_cache::icon_cache_handle;
 
 // Import Message type and fl macro from main
-pub use crate::{fl, Message};
+pub use crate::{Message, fl};
 
 /// Helper function to create a styled badge icon
 fn styled_badge_icon<'a>(
@@ -21,11 +21,11 @@ fn styled_badge_icon<'a>(
 ) -> Element<'a, Message> {
     widget::icon::icon(icon_cache_handle(icon_name, icon_size))
         .size(icon_size)
-        .class(cosmic::theme::Svg::Custom(std::rc::Rc::new(move |_theme| {
-            cosmic::iced::widget::svg::Style {
+        .class(cosmic::theme::Svg::Custom(std::rc::Rc::new(
+            move |_theme| cosmic::iced::widget::svg::Style {
                 color: Some(icon_color),
-            }
-        })))
+            },
+        )))
         .into()
 }
 
@@ -45,37 +45,35 @@ pub fn wayland_compat_badge<'a>(
 ) -> Option<Element<'a, Message>> {
     // First try to get Wayland compatibility from app_stats (loaded from Flathub)
     let compat = app_stats
-        .get(&AppId::new(&info.desktop_ids.first().cloned().unwrap_or_default()))
+        .get(&AppId::new(
+            &info.desktop_ids.first().cloned().unwrap_or_default(),
+        ))
         .and_then(|(_, compat)| compat.as_ref())
         .copied()
         .or_else(|| info.wayland_compat_lazy());
 
     let compat_badge = if let Some(compat) = compat {
         match compat.risk_level {
-            RiskLevel::Low => {
-                Some(widget::tooltip(
-                    styled_badge_icon(
-                        "checkbox-checked-symbolic",
-                        icon_size,
-                        Color::from_rgb(0.15, 0.75, 0.3),
-                        Color::from_rgba(0.15, 0.75, 0.3, 0.2),
-                    ),
-                    widget::text::caption(fl!("wayland-native-tooltip")),
-                    widget::tooltip::Position::Bottom,
-                ))
-            }
-            RiskLevel::Medium => {
-                Some(widget::tooltip(
-                    styled_badge_icon(
-                        "dialog-information-symbolic",
-                        icon_size,
-                        Color::from_rgb(0.2, 0.6, 0.85),
-                        Color::from_rgba(0.2, 0.6, 0.85, 0.2),
-                    ),
-                    widget::text::caption(format!("{:?} - Good Wayland support", compat.framework)),
-                    widget::tooltip::Position::Bottom,
-                ))
-            }
+            RiskLevel::Low => Some(widget::tooltip(
+                styled_badge_icon(
+                    "checkbox-checked-symbolic",
+                    icon_size,
+                    Color::from_rgb(0.15, 0.75, 0.3),
+                    Color::from_rgba(0.15, 0.75, 0.3, 0.2),
+                ),
+                widget::text::caption(fl!("wayland-native-tooltip")),
+                widget::tooltip::Position::Bottom,
+            )),
+            RiskLevel::Medium => Some(widget::tooltip(
+                styled_badge_icon(
+                    "dialog-information-symbolic",
+                    icon_size,
+                    Color::from_rgb(0.2, 0.6, 0.85),
+                    Color::from_rgba(0.2, 0.6, 0.85, 0.2),
+                ),
+                widget::text::caption(format!("{:?} - Good Wayland support", compat.framework)),
+                widget::tooltip::Position::Bottom,
+            )),
             RiskLevel::High => {
                 let tooltip_text = if matches!(compat.support, WaylandSupport::X11Only) {
                     fl!("x11-only-tooltip")

@@ -3,11 +3,11 @@ use std::fs;
 
 pub struct OsInfo {
     #[allow(dead_code)]
-    pub id: String,              // "pop" or "ubuntu"
+    pub id: String, // "pop" or "ubuntu"
     #[allow(dead_code)]
-    pub version_id: String,      // "24.04"
+    pub version_id: String, // "24.04"
     pub version_codename: String, // "noble"
-    pub ubuntu_codename: String, // "noble" (for Pop!_OS)
+    pub ubuntu_codename: String,  // "noble" (for Pop!_OS)
 }
 
 impl OsInfo {
@@ -28,7 +28,11 @@ impl OsInfo {
             }
         }
 
-        let id = map.get("ID").map(|s| s.as_str()).unwrap_or("ubuntu").to_string();
+        let id = map
+            .get("ID")
+            .map(|s| s.as_str())
+            .unwrap_or("ubuntu")
+            .to_string();
         let version_id = map
             .get("VERSION_ID")
             .map(|s| s.as_str())

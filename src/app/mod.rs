@@ -1,3 +1,5 @@
+mod views;
+
 use cosmic::{
     Application, ApplicationExt, Element, action,
     app::{Core, Task, context_drawer},
@@ -1612,7 +1614,7 @@ impl App {
                 id: "flathub".to_string(),
                 name: "Flathub".to_string(),
                 kind: SourceKind::Recommended {
-                    data: include_bytes!("../res/flathub.flatpakrepo"),
+                    data: include_bytes!("../../res/flathub.flatpakrepo"),
                     enabled: false,
                 },
                 requires: Vec::new(),
@@ -1622,7 +1624,7 @@ impl App {
                 id: "cosmic".to_string(),
                 name: "COSMIC Flatpak".to_string(),
                 kind: SourceKind::Recommended {
-                    data: include_bytes!("../res/cosmic.flatpakrepo"),
+                    data: include_bytes!("../../res/cosmic.flatpakrepo"),
                     enabled: false,
                 },
                 //TODO: can this be defined in flatpakrepo file?
@@ -1778,28 +1780,7 @@ impl App {
         spacing: cosmic_theme::Spacing,
         grid_width: usize,
     ) -> Element<'a, Message> {
-        //TODO: paging or dynamic load
-        let results_len = cmp::min(results.len(), MAX_RESULTS);
-
-        let mut column = widget::column::with_capacity(2)
-            .padding([0, spacing.space_s, spacing.space_m, spacing.space_s])
-            .spacing(spacing.space_xxs)
-            .width(Length::Fill);
-
-        //TODO: back button?
-        if results.is_empty() {
-            column = column.push(widget::text::body(fl!("no-results", search = input)));
-        }
-
-        column = column.push(SearchResult::grid_view(
-            &results[..results_len],
-            spacing,
-            grid_width,
-            Message::SelectSearchResult,
-            &self.app_stats,
-        ));
-
-        column.into()
+        views::render_search_results(input, results, spacing, grid_width, &self.app_stats)
     }
 
     fn view_explore_page<'a>(

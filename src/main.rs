@@ -110,7 +110,6 @@ use scroll_context::ScrollContext;
 mod search_logic;
 mod url_handlers;
 
-/// Runs application with these settings
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn")).init();
 
@@ -186,7 +185,10 @@ impl Package {
         top_controls: Option<Vec<Element<'a, Message>>>,
         spacing: &cosmic_theme::Spacing,
         width: usize,
-        app_stats: &'a std::collections::HashMap<crate::app_id::AppId, (u64, Option<crate::app_info::WaylandCompatibility>)>,
+        app_stats: &'a std::collections::HashMap<
+            crate::app_id::AppId,
+            (u64, Option<crate::app_info::WaylandCompatibility>),
+        >,
     ) -> Element<'a, Message> {
         package_card_view(
             &self.info,
@@ -200,7 +202,6 @@ impl Package {
     }
 }
 
-/// The [`App`] stores application-specific state.
 pub struct App {
     core: Core,
     config_handler: Option<cosmic_config::Config>,
@@ -419,7 +420,10 @@ impl App {
         Task::perform(
             async move {
                 tokio::task::spawn_blocking(move || {
-                    log::info!("start batch search for all explore pages ({} apps)", apps.len());
+                    log::info!(
+                        "start batch search for all explore pages ({} apps)",
+                        apps.len()
+                    );
                     let start = Instant::now();
                     let now = chrono::Utc::now().timestamp();
                     let results_map = crate::search_logic::explore_results_all(
@@ -475,7 +479,6 @@ impl App {
         )
     }
 
-    /// Load icons for search results (lazy loading - called when results are displayed)
     fn load_icons_for_results(&self, results: &mut [crate::search::SearchResult]) {
         use crate::constants::MAX_RESULTS;
 

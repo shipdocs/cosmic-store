@@ -1,3 +1,4 @@
+mod handlers;
 mod views;
 
 use cosmic::{
@@ -93,55 +94,55 @@ impl Package {
 }
 
 pub struct App {
-    core: Core,
-    config_handler: Option<cosmic_config::Config>,
-    config: Config,
-    mode: Mode,
-    locale: String,
-    os_codename: String,
-    app_themes: Vec<String>,
-    apps: Arc<Apps>,
-    backends: Backends,
-    context_page: ContextPage,
-    dialog_pages: VecDeque<DialogPage>,
-    explore_page_opt: Option<ExplorePage>,
-    key_binds: HashMap<KeyBind, Action>,
-    nav_model: widget::nav_bar::Model,
+    pub(crate) core: Core,
+    pub(crate) config_handler: Option<cosmic_config::Config>,
+    pub(crate) config: Config,
+    pub(crate) mode: Mode,
+    pub(crate) locale: String,
+    pub(crate) os_codename: String,
+    pub(crate) app_themes: Vec<String>,
+    pub(crate) apps: Arc<Apps>,
+    pub(crate) backends: Backends,
+    pub(crate) context_page: ContextPage,
+    pub(crate) dialog_pages: VecDeque<DialogPage>,
+    pub(crate) explore_page_opt: Option<ExplorePage>,
+    pub(crate) key_binds: HashMap<KeyBind, Action>,
+    pub(crate) nav_model: widget::nav_bar::Model,
     #[cfg(feature = "notify")]
-    notification_opt: Option<Arc<Mutex<notify_rust::NotificationHandle>>>,
-    pending_operation_id: u64,
-    pending_operations: BTreeMap<u64, (Operation, f32)>,
-    progress_operations: BTreeSet<u64>,
-    complete_operations: BTreeMap<u64, Operation>,
-    failed_operations: BTreeMap<u64, (Operation, f32, String)>,
-    repos_changing: Vec<(&'static str, String, bool)>,
-    scrollable_id: widget::Id,
-    scroll_views: HashMap<ScrollContext, scrollable::Viewport>,
-    search_active: bool,
-    search_id: widget::Id,
-    search_input: String,
-    search_sort_mode: SearchSortMode,
-    search_sort_options: Vec<String>,
-    wayland_filter: WaylandFilter,
-    wayland_filter_options: Vec<String>,
-    size: Cell<Option<Size>>,
+    pub(crate) notification_opt: Option<Arc<Mutex<notify_rust::NotificationHandle>>>,
+    pub(crate) pending_operation_id: u64,
+    pub(crate) pending_operations: BTreeMap<u64, (Operation, f32)>,
+    pub(crate) progress_operations: BTreeSet<u64>,
+    pub(crate) complete_operations: BTreeMap<u64, Operation>,
+    pub(crate) failed_operations: BTreeMap<u64, (Operation, f32, String)>,
+    pub(crate) repos_changing: Vec<(&'static str, String, bool)>,
+    pub(crate) scrollable_id: widget::Id,
+    pub(crate) scroll_views: HashMap<ScrollContext, scrollable::Viewport>,
+    pub(crate) search_active: bool,
+    pub(crate) search_id: widget::Id,
+    pub(crate) search_input: String,
+    pub(crate) search_sort_mode: SearchSortMode,
+    pub(crate) search_sort_options: Vec<String>,
+    pub(crate) wayland_filter: WaylandFilter,
+    pub(crate) wayland_filter_options: Vec<String>,
+    pub(crate) size: Cell<Option<Size>>,
     //TODO: use hashset?
-    installed: Option<Vec<(&'static str, Package)>>,
+    pub(crate) installed: Option<Vec<(&'static str, Package)>>,
     //TODO: use hashset?
-    updates: Option<Vec<(&'static str, Package)>>,
+    pub(crate) updates: Option<Vec<(&'static str, Package)>>,
     //TODO: use hashset?
-    waiting_installed: Vec<(&'static str, String, AppId)>,
+    pub(crate) waiting_installed: Vec<(&'static str, String, AppId)>,
     //TODO: use hashset?
-    waiting_updates: Vec<(&'static str, String, AppId)>,
-    category_results: Option<(&'static [Category], Vec<SearchResult>)>,
-    explore_results: HashMap<ExplorePage, Vec<SearchResult>>,
-    installed_results: Option<Vec<SearchResult>>,
-    search_results: Option<(String, Vec<SearchResult>)>,
-    details_page_opt: Option<DetailsPage>,
-    applet_placement_buttons: cosmic::widget::segmented_button::SingleSelectModel,
-    uninstall_purge_data: bool,
-    loading_frame: usize,
-    app_stats: HashMap<AppId, (u64, Option<crate::app_info::WaylandCompatibility>)>,
+    pub(crate) waiting_updates: Vec<(&'static str, String, AppId)>,
+    pub(crate) category_results: Option<(&'static [Category], Vec<SearchResult>)>,
+    pub(crate) explore_results: HashMap<ExplorePage, Vec<SearchResult>>,
+    pub(crate) installed_results: Option<Vec<SearchResult>>,
+    pub(crate) search_results: Option<(String, Vec<SearchResult>)>,
+    pub(crate) details_page_opt: Option<DetailsPage>,
+    pub(crate) applet_placement_buttons: cosmic::widget::segmented_button::SingleSelectModel,
+    pub(crate) uninstall_purge_data: bool,
+    pub(crate) loading_frame: usize,
+    pub(crate) app_stats: HashMap<AppId, (u64, Option<crate::app_info::WaylandCompatibility>)>,
 }
 
 impl DetailsPageActions for App {
@@ -157,7 +158,7 @@ impl DetailsPageActions for App {
 }
 
 impl App {
-    fn open_desktop_id(&self, mut desktop_id: String) -> Task<Message> {
+    pub(crate) fn open_desktop_id(&self, mut desktop_id: String) -> Task<Message> {
         Task::perform(
             async move {
                 tokio::task::spawn_blocking(move || {
@@ -211,7 +212,7 @@ impl App {
         )
     }
 
-    fn operation(&mut self, operation: Operation) {
+    pub(crate) fn operation(&mut self, operation: Operation) {
         match &operation.kind {
             OperationKind::RepositoryAdd(adds) => {
                 for add in adds.iter() {
@@ -234,7 +235,7 @@ impl App {
         self.pending_operations.insert(id, (operation, 0.0));
     }
 
-    fn categories(&self, categories: &'static [Category]) -> Task<Message> {
+    pub(crate) fn categories(&self, categories: &'static [Category]) -> Task<Message> {
         let apps = self.apps.clone();
         let backends = self.backends.clone();
         let app_stats = self.app_stats.clone();
@@ -302,7 +303,7 @@ impl App {
         )
     }
 
-    fn explore_results_all_batch(&self) -> Task<Message> {
+    pub(crate) fn explore_results_all_batch(&self) -> Task<Message> {
         let apps = self.apps.clone();
         let backends = self.backends.clone();
         let app_stats = self.app_stats.clone();
@@ -339,7 +340,7 @@ impl App {
         )
     }
 
-    fn installed_results(&self) -> Task<Message> {
+    pub(crate) fn installed_results(&self) -> Task<Message> {
         let apps = self.apps.clone();
         let backends = self.backends.clone();
         let app_stats = self.app_stats.clone();
@@ -369,7 +370,7 @@ impl App {
         )
     }
 
-    fn load_icons_for_results(&self, results: &mut [crate::search::SearchResult]) {
+    pub(crate) fn load_icons_for_results(&self, results: &mut [crate::search::SearchResult]) {
         use crate::constants::MAX_RESULTS;
 
         // Load icons for the first page of results
@@ -394,7 +395,7 @@ impl App {
         }
     }
 
-    fn search(&self) -> Task<Message> {
+    pub(crate) fn search(&self) -> Task<Message> {
         let input = self.search_input.clone();
 
         // Handle supported URI schemes before trying plain text search
@@ -685,7 +686,7 @@ impl App {
         self.update_scroll()
     }
 
-    fn scroll_context(&self) -> ScrollContext {
+    pub(crate) fn scroll_context(&self) -> ScrollContext {
         if self.details_page_opt.is_some() {
             ScrollContext::DetailsPage
         } else if self.search_results.is_some() {
@@ -697,7 +698,7 @@ impl App {
         }
     }
 
-    fn update_scroll(&mut self) -> Task<Message> {
+    pub(crate) fn update_scroll(&mut self) -> Task<Message> {
         let scroll_context = self.scroll_context();
         // Clear unused scroll contexts
         for remove_context in scroll_context.unused_contexts() {
@@ -742,7 +743,7 @@ impl App {
         cosmic::command::set_theme(self.config.app_theme.theme())
     }
 
-    fn handle_config_message(&mut self, message: Message) -> Task<Message> {
+    pub(crate) fn handle_config_message(&mut self, message: Message) -> Task<Message> {
         // Helper for updating config values efficiently
         macro_rules! config_set {
             ($name: ident, $value: expr) => {
@@ -789,7 +790,7 @@ impl App {
         }
     }
 
-    fn handle_search_message(&mut self, message: Message) -> Task<Message> {
+    pub(crate) fn handle_search_message(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::CategoryResults(categories, mut results) => {
                 // Load icons lazily when results are received (not during search)
@@ -922,7 +923,7 @@ impl App {
         }
     }
 
-    fn handle_backend_message(&mut self, message: Message) -> Task<Message> {
+    pub(crate) fn handle_backend_message(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::Backends(backends) => {
                 self.backends = backends;
@@ -989,7 +990,7 @@ impl App {
         }
     }
 
-    fn handle_dialog_message(&mut self, message: Message) -> Task<Message> {
+    pub(crate) fn handle_dialog_message(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::DialogCancel => {
                 self.dialog_pages.pop_front();
@@ -1027,7 +1028,7 @@ impl App {
         Task::none()
     }
 
-    fn handle_operation_message(&mut self, message: Message) -> Task<Message> {
+    pub(crate) fn handle_operation_message(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::Operation(kind, backend_name, package_id, info) => {
                 self.operation(Operation {
@@ -1095,7 +1096,7 @@ impl App {
         }
     }
 
-    fn handle_selection_message(&mut self, message: Message) -> Task<Message> {
+    pub(crate) fn handle_selection_message(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::Select(backend_name, id, icon, info) => {
                 self.select(backend_name, id, icon, info)
@@ -1297,7 +1298,7 @@ impl App {
     }
 
     //TODO: run in background
-    fn update_apps(&mut self) {
+    pub(crate) fn update_apps(&mut self) {
         let start = Instant::now();
         let mut apps = Apps::new();
 
@@ -1481,7 +1482,7 @@ impl App {
         }
     }
 
-    fn operations(&self) -> Element<'_, Message> {
+    pub(crate) fn operations(&self) -> Element<'_, Message> {
         let cosmic_theme::Spacing {
             space_xs, space_m, ..
         } = theme::active().cosmic().spacing;
@@ -1533,7 +1534,7 @@ impl App {
             .into()
     }
 
-    fn settings(&self) -> Element<'_, Message> {
+    pub(crate) fn settings(&self) -> Element<'_, Message> {
         let app_theme_selected = match self.config.app_theme {
             AppTheme::Dark => 1,
             AppTheme::Light => 2,
@@ -1560,7 +1561,7 @@ impl App {
         .into()
     }
 
-    fn release_notes(&self, index: usize) -> Element<'_, Message> {
+    pub(crate) fn release_notes(&self, index: usize) -> Element<'_, Message> {
         let (version, date, summary, url) = {
             self.updates
                 .as_deref()
@@ -1663,7 +1664,7 @@ impl App {
         sources
     }
 
-    fn repositories(&self) -> Element<'_, Message> {
+    pub(crate) fn repositories(&self) -> Element<'_, Message> {
         if !cfg!(feature = "flatpak") {
             return widget::text(fl!("no-flatpak")).into();
         }
@@ -2096,369 +2097,7 @@ impl Application for App {
 
     /// Handle application events here.
     fn update(&mut self, message: Self::Message) -> Task<Message> {
-        match message {
-            Message::AppTheme(_) | Message::Config(_) | Message::SystemThemeModeChange(_) => {
-                return self.handle_config_message(message);
-            }
-            Message::LoadingTick => {
-                if matches!(self.mode, Mode::Normal) {
-                    self.loading_frame = self.loading_frame.wrapping_add(1);
-                }
-                return Task::none();
-            }
-            Message::Apps(apps) => {
-                self.apps = apps;
-                return Task::none();
-            }
-            Message::Backends(_)
-            | Message::StatsLoaded(_)
-            | Message::CheckUpdates
-            | Message::UpdateAll
-            | Message::Updates(_) => {
-                return self.handle_backend_message(message);
-            }
-            Message::DialogCancel | Message::DialogConfirm | Message::DialogPage(_) => {
-                return self.handle_dialog_message(message);
-            }
-            Message::Operation(_, _, _, _)
-            | Message::PendingComplete(_)
-            | Message::PendingDismiss
-            | Message::PendingError(_, _)
-            | Message::PendingProgress(_, _)
-            | Message::RepositoryAdd(_, _)
-            | Message::RepositoryAddDialog(_) => {
-                return self.handle_operation_message(message);
-            }
-            Message::CategoryResults(_, _)
-            | Message::SearchActivate
-            | Message::SearchClear
-            | Message::SearchInput(_)
-            | Message::SearchResults(..)
-            | Message::SearchSortMode(_)
-            | Message::SearchSubmit(_)
-            | Message::WaylandFilter(_) => {
-                return self.handle_search_message(message);
-            }
-            Message::Select(_, _, _, _)
-            | Message::SelectInstalled(_)
-            | Message::SelectUpdates(_)
-            | Message::SelectNone
-            | Message::SelectCategoryResult(_)
-            | Message::SelectExploreResult(_, _)
-            | Message::SelectSearchResult(_)
-            | Message::SelectedAddonsViewMore(_)
-            | Message::SelectedScreenshot(..)
-            | Message::SelectedScreenshotShown(_)
-            | Message::SelectedSource(_) => {
-                return self.handle_selection_message(message);
-            }
-            Message::RepositoryRemove(backend_name, repo_rms) => {
-                self.operation(Operation {
-                    kind: OperationKind::RepositoryRemove(repo_rms, false),
-                    backend_name,
-                    package_ids: Vec::new(),
-                    infos: Vec::new(),
-                });
-            }
-            Message::ToggleUninstallPurgeData(value) => {
-                self.uninstall_purge_data = value;
-            }
-            Message::ExplorePage(explore_page_opt) => {
-                self.explore_page_opt = explore_page_opt;
-                return self.update_scroll();
-            }
-            Message::ExploreResults(explore_page, results) => {
-                // Load icons lazily when results are received (not during search)
-                let mut results = results;
-                self.load_icons_for_results(&mut results);
-                self.explore_results.insert(explore_page, results);
-            }
-            Message::ExploreResultsReady(results_map) => {
-                // Batch results received - load icons and insert all at once
-                for (explore_page, mut results) in results_map {
-                    self.load_icons_for_results(&mut results);
-                    self.explore_results.insert(explore_page, results);
-                }
-            }
-            Message::GStreamerExit(code) => match self.mode {
-                Mode::Normal => {}
-                Mode::GStreamer { .. } => {
-                    process::exit(code as i32);
-                }
-            },
-            Message::GStreamerInstall => {
-                let mut ops = Vec::new();
-                match &mut self.mode {
-                    Mode::Normal => {}
-                    Mode::GStreamer {
-                        selected,
-                        installing,
-                        ..
-                    } => {
-                        if let Some((_input, results)) = &self.search_results {
-                            for (i, result) in results.iter().enumerate() {
-                                let installed = Self::is_installed_inner(
-                                    &self.installed,
-                                    result.backend_name(),
-                                    &result.id,
-                                    &result.info,
-                                );
-                                if installed != selected.contains(&i) {
-                                    let kind = if installed {
-                                        OperationKind::Uninstall { purge_data: false }
-                                    } else {
-                                        OperationKind::Install
-                                    };
-                                    eprintln!(
-                                        "{:?} {:?} from backend {} and info {:?}",
-                                        kind,
-                                        result.id,
-                                        result.backend_name(),
-                                        result.info
-                                    );
-                                    ops.push(Operation {
-                                        kind,
-                                        backend_name: result.backend_name(),
-                                        package_ids: vec![result.id.clone()],
-                                        infos: vec![result.info.clone()],
-                                    });
-                                }
-                            }
-                            *installing = true;
-                        }
-                    }
-                }
-                for op in ops {
-                    self.operation(op);
-                }
-            }
-            Message::GStreamerToggle(i) => match &mut self.mode {
-                Mode::Normal => {}
-                Mode::GStreamer { selected, .. } => {
-                    if !selected.remove(&i) {
-                        selected.insert(i);
-                    }
-                }
-            },
-            Message::Installed(installed) => {
-                self.installed = Some(installed);
-                self.waiting_installed.clear();
-
-                self.update_apps();
-                let mut commands = Vec::new();
-                if self.search_active && self.details_page_opt.is_none() {
-                    commands.push(self.search());
-                }
-                match self.mode {
-                    Mode::Normal => {
-                        if let Some(categories) = self
-                            .nav_model
-                            .active_data::<NavPage>()
-                            .and_then(|nav_page| nav_page.categories())
-                        {
-                            commands.push(self.categories(categories));
-                        }
-                        commands.push(self.installed_results());
-                        // Batch all explore page searches into a single O(N) pass instead of O(13N)
-                        commands.push(self.explore_results_all_batch());
-                    }
-                    Mode::GStreamer { .. } => {}
-                }
-                return Task::batch(commands);
-            }
-            Message::InstalledResults(installed_results) => {
-                // Load icons lazily when results are received (not during search)
-                let mut installed_results = installed_results;
-                self.load_icons_for_results(&mut installed_results);
-                self.installed_results = Some(installed_results);
-            }
-            Message::Key(modifiers, key, text) => {
-                if !self.dialog_pages.is_empty()
-                    && matches!(key, Key::Named(key::Named::Escape))
-                    && !modifiers.logo()
-                    && !modifiers.control()
-                    && !modifiers.alt()
-                    && !modifiers.shift()
-                {
-                    return self.update(Message::DialogCancel);
-                }
-
-                for (key_bind, action) in self.key_binds.iter() {
-                    if key_bind.matches(modifiers, &key) {
-                        return self.update(action.message());
-                    }
-                }
-
-                if !modifiers.logo()
-                    && !modifiers.control()
-                    && !modifiers.alt()
-                    && matches!(key, Key::Character(_))
-                {
-                    if let Some(text) = text {
-                        self.search_active = true;
-                        self.search_input.push_str(&text);
-                        return Task::batch([
-                            widget::text_input::focus(self.search_id.clone()),
-                            self.search(),
-                        ]);
-                    }
-                }
-            }
-            Message::LaunchUrl(url) => match open::that_detached(&url) {
-                Ok(()) => {}
-                Err(err) => {
-                    log::warn!("failed to open {:?}: {}", url, err);
-                }
-            },
-            Message::MaybeExit => {
-                if self.core.main_window_id().is_none() && self.pending_operations.is_empty() {
-                    process::exit(0);
-                }
-            }
-            #[cfg(feature = "notify")]
-            Message::Notification(notification) => {
-                self.notification_opt = Some(notification);
-            }
-            Message::OpenDesktopId(desktop_id) => {
-                return self.open_desktop_id(desktop_id);
-            }
-            Message::ScrollView(viewport) => {
-                self.scroll_views.insert(self.scroll_context(), viewport);
-            }
-            Message::ToggleContextPage(context_page) => {
-                if self.core.window.show_context && self.context_page == context_page {
-                    self.core.window.show_context = false;
-                } else {
-                    self.context_page = context_page;
-                    self.core.window.show_context = true;
-                }
-            }
-            Message::WindowClose => {
-                if let Some(window_id) = self.core.main_window_id() {
-                    self.core.set_main_window_id(None);
-                    return Task::batch([
-                        window::close(window_id),
-                        Task::perform(async move { action::app(Message::MaybeExit) }, |x| x),
-                    ]);
-                }
-            }
-            Message::WindowNew => match env::current_exe() {
-                Ok(exe) => match process::Command::new(&exe).spawn() {
-                    Ok(_child) => {}
-                    Err(err) => {
-                        log::error!("failed to execute {:?}: {}", exe, err);
-                    }
-                },
-                Err(err) => {
-                    log::error!("failed to get current executable path: {}", err);
-                }
-            },
-            Message::SelectPlacement(selection) => {
-                self.applet_placement_buttons.activate(selection);
-            }
-            #[cfg(not(feature = "wayland"))]
-            Message::PlaceApplet(id) => {
-                log::error!(
-                    "cannot place applet {:?}, not compiled with wayland feature",
-                    id
-                );
-            }
-            #[cfg(feature = "wayland")]
-            Message::PlaceApplet(id) => {
-                self.dialog_pages.pop_front();
-
-                // Panel or Dock specific references
-                let panel_info = if Some(self.applet_placement_buttons.active())
-                    == self.applet_placement_buttons.entity_at(1)
-                {
-                    ("Dock", "cosmic-settings dock-applet")
-                } else {
-                    ("Panel", "cosmic-settings panel-applet")
-                };
-
-                // Load in panel or dock configs for adding new applet
-                let panel_config_helper = CosmicPanelConfig::cosmic_config(panel_info.0).ok();
-                let mut applet_config =
-                    panel_config_helper
-                        .as_ref()
-                        .and_then(|panel_config_helper| {
-                            let panel_config =
-                                CosmicPanelConfig::get_entry(panel_config_helper).ok()?;
-                            (panel_config.name == panel_info.0).then_some(panel_config)
-                        });
-                let Some(applet_config) = applet_config.as_mut() else {
-                    return Task::none();
-                };
-
-                // check if the applet is already added to the panel
-                let applet_id = id.raw().to_owned();
-                let mut applet_exists = false;
-                if let Some(center) = applet_config.plugins_center.as_ref() {
-                    if center.iter().any(|a| a.as_str() == applet_id) {
-                        applet_exists = true;
-                    }
-                }
-                if let Some(wings) = applet_config.plugins_wings.as_ref() {
-                    if wings
-                        .0
-                        .iter()
-                        .chain(wings.1.iter())
-                        .any(|a| a.as_str() == applet_id)
-                    {
-                        applet_exists = true;
-                    }
-                }
-
-                // if applet doesn't already exist, continue adding
-                if !applet_exists {
-                    // add applet to the end of the left wing (matching the applet settings behaviour)
-                    let list = if let Some((list, _)) = applet_config.plugins_wings.as_mut() {
-                        list
-                    } else {
-                        applet_config.plugins_wings = Some((Vec::new(), Vec::new()));
-                        &mut applet_config.plugins_wings.as_mut().unwrap().0
-                    };
-                    list.push(id.raw().to_string());
-
-                    // save config
-                    if let Some(save_helper) = panel_config_helper.as_ref() {
-                        if let Err(e) = applet_config.write_entry(save_helper) {
-                            log::error!("Failed to save applet: {:?}", e);
-                        }
-                    } else {
-                        log::error!("No panel config helper. Failed to save applet.");
-                    };
-                }
-
-                // launch the applet settings
-                let settings_desktop_id = "com.system76.CosmicSettings";
-                let exec = panel_info.1;
-                return Task::perform(
-                    async move {
-                        tokio::task::spawn_blocking(move || Some((exec, settings_desktop_id)))
-                            .await
-                            .unwrap_or(None)
-                    },
-                    |result| {
-                        #[cfg(feature = "desktop")]
-                        if let Some((exec, settings_desktop_id)) = result {
-                            tokio::spawn(async move {
-                                cosmic::desktop::spawn_desktop_exec(
-                                    &exec,
-                                    Vec::<(&str, &str)>::new(),
-                                    Some(settings_desktop_id),
-                                    false,
-                                )
-                                .await;
-                            });
-                        }
-                        action::none()
-                    },
-                );
-            }
-        }
-
-        Task::none()
+        handlers::update(self, message)
     }
 
     fn context_drawer(&self) -> Option<context_drawer::ContextDrawer<'_, Message>> {
@@ -2569,210 +2208,6 @@ impl Application for App {
     }
 
     fn subscription(&self) -> Subscription<Self::Message> {
-        struct ConfigSubscription;
-        struct ThemeSubscription;
-
-        let mut subscriptions = vec![
-            event::listen_with(|event, status, _window_id| match event {
-                Event::Keyboard(KeyEvent::KeyPressed {
-                    key,
-                    modifiers,
-                    text,
-                    ..
-                }) => match status {
-                    event::Status::Ignored => Some(Message::Key(modifiers, key, text)),
-                    event::Status::Captured => None,
-                },
-                Event::Window(WindowEvent::CloseRequested) => Some(Message::WindowClose),
-                _ => None,
-            }),
-            cosmic_config::config_subscription(
-                TypeId::of::<ConfigSubscription>(),
-                Self::APP_ID.into(),
-                CONFIG_VERSION,
-            )
-            .map(|update| {
-                if !update.errors.is_empty() {
-                    log::debug!("errors loading config: {:?}", update.errors);
-                }
-                Message::SystemThemeModeChange(update.config)
-            }),
-            cosmic_config::config_subscription::<_, cosmic_theme::ThemeMode>(
-                TypeId::of::<ThemeSubscription>(),
-                cosmic_theme::THEME_MODE_ID.into(),
-                cosmic_theme::ThemeMode::version(),
-            )
-            .map(|update| {
-                if !update.errors.is_empty() {
-                    log::debug!("errors loading theme mode: {:?}", update.errors);
-                }
-                Message::SystemThemeModeChange(update.config)
-            }),
-        ];
-
-        if self.explore_results.is_empty() {
-            subscriptions.push(
-                cosmic::iced::time::every(std::time::Duration::from_millis(16))
-                    .map(|_| Message::LoadingTick),
-            );
-        }
-
-        if !self.pending_operations.is_empty() {
-            #[cfg(feature = "logind")]
-            {
-                struct InhibitSubscription;
-                subscriptions.push(Subscription::run_with_id(
-                    TypeId::of::<InhibitSubscription>(),
-                    stream::channel(1, move |_msg_tx| async move {
-                        let _inhibits = logind::inhibit().await;
-                        pending().await
-                    }),
-                ));
-            }
-
-            #[cfg(feature = "notify")]
-            if self.core.main_window_id().is_none() {
-                struct NotificationSubscription;
-                subscriptions.push(Subscription::run_with_id(
-                    TypeId::of::<NotificationSubscription>(),
-                    stream::channel(1, move |msg_tx| async move {
-                        let msg_tx = Arc::new(tokio::sync::Mutex::new(msg_tx));
-                        tokio::task::spawn_blocking(move || match notify_rust::Notification::new()
-                            .summary(&fl!("notification-in-progress"))
-                            .auto_icon()
-                            .show()
-                        {
-                            Ok(notification) => {
-                                let _ = futures::executor::block_on(async {
-                                    msg_tx
-                                        .lock()
-                                        .await
-                                        .send(Message::Notification(Arc::new(Mutex::new(
-                                            notification,
-                                        ))))
-                                        .await
-                                });
-                            }
-                            Err(err) => {
-                                log::warn!("failed to create notification: {}", err);
-                            }
-                        })
-                        .await
-                        .unwrap();
-
-                        pending().await
-                    }),
-                ));
-            }
-        }
-
-        for (id, (op, _)) in self.pending_operations.iter() {
-            //TODO: use recipe?
-            let id = *id;
-            let backend_opt = self.backends.get(op.backend_name).cloned();
-            let op = op.clone();
-            subscriptions.push(Subscription::run_with_id(
-                id,
-                stream::channel(16, move |msg_tx| async move {
-                    let msg_tx = Arc::new(tokio::sync::Mutex::new(msg_tx));
-                    let res = match backend_opt {
-                        Some(backend) => {
-                            let on_progress = {
-                                let msg_tx = msg_tx.clone();
-                                Box::new(move |progress| {
-                                    let _ = futures::executor::block_on(async {
-                                        msg_tx
-                                            .lock()
-                                            .await
-                                            .send(Message::PendingProgress(id, progress))
-                                            .await
-                                    });
-                                })
-                            };
-                            let msg_tx = msg_tx.clone();
-                            tokio::task::spawn_blocking(move || {
-                                match backend.operation(&op, on_progress) {
-                                    Ok(()) => Ok(()),
-                                    Err(err) => match err.downcast_ref::<RepositoryRemoveError>() {
-                                        Some(repo_rm) => {
-                                            let _ = futures::executor::block_on(async {
-                                                msg_tx
-                                                    .lock()
-                                                    .await
-                                                    .send(Message::DialogPage(
-                                                        DialogPage::RepositoryRemove(
-                                                            op.backend_name,
-                                                            repo_rm.clone(),
-                                                        ),
-                                                    ))
-                                                    .await
-                                            });
-                                            Ok(())
-                                        }
-                                        None => Err(err.to_string()),
-                                    },
-                                }
-                            })
-                            .await
-                            .unwrap()
-                        }
-                        None => Err(format!("backend {:?} not found", op.backend_name)),
-                    };
-
-                    match res {
-                        Ok(()) => {
-                            let _ = msg_tx.lock().await.send(Message::PendingComplete(id)).await;
-                        }
-                        Err(err) => {
-                            let _ = msg_tx
-                                .lock()
-                                .await
-                                .send(Message::PendingError(id, err))
-                                .await;
-                        }
-                    }
-                    pending().await
-                }),
-            ));
-        }
-
-        if let Some(selected) = &self.details_page_opt {
-            for (screenshot_i, screenshot) in selected.info.screenshots.iter().enumerate() {
-                let url = screenshot.url.clone();
-                subscriptions.push(Subscription::run_with_id(
-                    url.clone(),
-                    stream::channel(16, move |mut msg_tx| async move {
-                        log::info!("fetch screenshot {}", url);
-                        match reqwest::get(&url).await {
-                            Ok(response) => match response.bytes().await {
-                                Ok(bytes) => {
-                                    log::info!(
-                                        "fetched screenshot from {}: {} bytes",
-                                        url,
-                                        bytes.len()
-                                    );
-                                    let _ = msg_tx
-                                        .send(Message::SelectedScreenshot(
-                                            screenshot_i,
-                                            url,
-                                            bytes.to_vec(),
-                                        ))
-                                        .await;
-                                }
-                                Err(err) => {
-                                    log::warn!("failed to read screenshot from {}: {}", url, err);
-                                }
-                            },
-                            Err(err) => {
-                                log::warn!("failed to request screenshot from {}: {}", url, err);
-                            }
-                        }
-                        pending().await
-                    }),
-                ));
-            }
-        }
-
-        Subscription::batch(subscriptions)
+        handlers::subscription(self)
     }
 }

@@ -1,3 +1,4 @@
+mod data;
 mod handlers;
 mod views;
 
@@ -236,137 +237,41 @@ impl App {
     }
 
     pub(crate) fn categories(&self, categories: &'static [Category]) -> Task<Message> {
-        let apps = self.apps.clone();
-        let backends = self.backends.clone();
-        let app_stats = self.app_stats.clone();
-        let os_codename = self.os_codename.clone();
-        Task::perform(
-            async move {
-                tokio::task::spawn_blocking(move || {
-                    let start = Instant::now();
-                    let results = crate::search_logic::categories_results(
-                        &apps,
-                        &backends,
-                        &app_stats,
-                        &os_codename,
-                        categories,
-                    );
-                    let duration = start.elapsed();
-                    log::info!(
-                        "searched for categories {:?} in {:?}, found {} results",
-                        categories,
-                        duration,
-                        results.len()
-                    );
-                    action::app(Message::CategoryResults(categories, results))
-                })
-                .await
-                .unwrap_or(action::none())
-            },
-            |x| x,
+        data::categories_task(
+            self.apps.clone(),
+            self.backends.clone(),
+            self.app_stats.clone(),
+            self.os_codename.clone(),
+            categories,
         )
     }
 
     #[allow(dead_code)]
     fn explore_results(&self, explore_page: ExplorePage) -> Task<Message> {
-        let apps = self.apps.clone();
-        let backends = self.backends.clone();
-        let app_stats = self.app_stats.clone();
-        let os_codename = self.os_codename.clone();
-        Task::perform(
-            async move {
-                tokio::task::spawn_blocking(move || {
-                    log::info!("start search for {:?}", explore_page);
-                    let start = Instant::now();
-                    let now = chrono::Utc::now().timestamp();
-                    let results = crate::search_logic::explore_results_data(
-                        &apps,
-                        &backends,
-                        &app_stats,
-                        &os_codename,
-                        explore_page,
-                        now,
-                    );
-                    let duration = start.elapsed();
-                    log::info!(
-                        "searched for {:?} in {:?}, found {} results",
-                        explore_page,
-                        duration,
-                        results.len()
-                    );
-                    action::app(Message::ExploreResults(explore_page, results))
-                })
-                .await
-                .unwrap_or(action::none())
-            },
-            |x| x,
+        data::explore_results_task(
+            self.apps.clone(),
+            self.backends.clone(),
+            self.app_stats.clone(),
+            self.os_codename.clone(),
+            explore_page,
         )
     }
 
     pub(crate) fn explore_results_all_batch(&self) -> Task<Message> {
-        let apps = self.apps.clone();
-        let backends = self.backends.clone();
-        let app_stats = self.app_stats.clone();
-        let os_codename = self.os_codename.clone();
-        Task::perform(
-            async move {
-                tokio::task::spawn_blocking(move || {
-                    log::info!(
-                        "start batch search for all explore pages ({} apps)",
-                        apps.len()
-                    );
-                    let start = Instant::now();
-                    let now = chrono::Utc::now().timestamp();
-                    let results_map = crate::search_logic::explore_results_all(
-                        &apps,
-                        &backends,
-                        &app_stats,
-                        &os_codename,
-                        now,
-                    );
-                    let duration = start.elapsed();
-                    let total_results: usize = results_map.values().map(|v| v.len()).sum();
-                    log::info!(
-                        "batch search for all explore pages in {:?}, found {} total results",
-                        duration,
-                        total_results
-                    );
-                    action::app(Message::ExploreResultsReady(results_map))
-                })
-                .await
-                .unwrap_or(action::none())
-            },
-            |x| x,
+        data::explore_results_all_batch_task(
+            self.apps.clone(),
+            self.backends.clone(),
+            self.app_stats.clone(),
+            self.os_codename.clone(),
         )
     }
 
     pub(crate) fn installed_results(&self) -> Task<Message> {
-        let apps = self.apps.clone();
-        let backends = self.backends.clone();
-        let app_stats = self.app_stats.clone();
-        let os_codename = self.os_codename.clone();
-        Task::perform(
-            async move {
-                tokio::task::spawn_blocking(move || {
-                    let start = Instant::now();
-                    let results = crate::search_logic::installed_results_data(
-                        &apps,
-                        &backends,
-                        &app_stats,
-                        &os_codename,
-                    );
-                    let duration = start.elapsed();
-                    log::info!(
-                        "searched for installed in {:?}, found {} results",
-                        duration,
-                        results.len()
-                    );
-                    action::app(Message::InstalledResults(results))
-                })
-                .await
-                .unwrap_or(action::none())
-            },
-            |x| x,
+        data::installed_results_task(
+            self.apps.clone(),
+            self.backends.clone(),
+            self.app_stats.clone(),
+            self.os_codename.clone(),
         )
     }
 
@@ -396,88 +301,14 @@ impl App {
     }
 
     pub(crate) fn search(&self) -> Task<Message> {
-        let input = self.search_input.clone();
-
-        // Handle supported URI schemes before trying plain text search
-        if let Ok(url) = reqwest::Url::parse(&input) {
-            match url.scheme() {
-                "appstream" => {
-                    return url_handlers::handle_appstream_url(
-                        &self.apps,
-                        &self.backends,
-                        &self.app_stats,
-                        &self.os_codename,
-                        input,
-                        url.path(),
-                    );
-                }
-                "file" => {
-                    return url_handlers::handle_file_url(&self.backends, input, url.path());
-                }
-                "mime" => {
-                    // This is a workaround to be able to search for mime handlers,
-                    // mime is not a real URL scheme
-                    return url_handlers::handle_mime_url(
-                        &self.apps,
-                        &self.backends,
-                        &self.app_stats,
-                        &self.os_codename,
-                        input,
-                        url.path(),
-                    );
-                }
-                scheme => {
-                    log::warn!("unsupported URL scheme {scheme} in {url}");
-                }
-            }
-        }
-
-        // Also handle standard file paths
-        if input.starts_with("/") && Path::new(&input).is_file() {
-            return url_handlers::handle_file_url(&self.backends, input.clone(), &input);
-        }
-
-        // Also handle gstreamer codec strings
-        if let Some(gstreamer_codec) = GStreamerCodec::parse(&input) {
-            return url_handlers::handle_gstreamer_codec(
-                &self.backends,
-                input.clone(),
-                gstreamer_codec,
-            );
-        }
-
-        let apps = self.apps.clone();
-        let backends = self.backends.clone();
-        let app_stats = self.app_stats.clone();
-        let os_codename = self.os_codename.clone();
-        let sort_mode = self.search_sort_mode;
-        let wayland_filter = self.wayland_filter;
-        Task::perform(
-            async move {
-                tokio::task::spawn_blocking(move || {
-                    let start = Instant::now();
-                    let results = crate::search_logic::search_results(
-                        &apps,
-                        &backends,
-                        &app_stats,
-                        &os_codename,
-                        &input,
-                        sort_mode,
-                        wayland_filter,
-                    );
-                    let duration = start.elapsed();
-                    log::info!(
-                        "searched for {:?} in {:?}, found {} results",
-                        input,
-                        duration,
-                        results.len()
-                    );
-                    action::app(Message::SearchResults(input, results, false))
-                })
-                .await
-                .unwrap_or(action::none())
-            },
-            |x| x,
+        data::search_task(
+            self.apps.clone(),
+            self.backends.clone(),
+            self.app_stats.clone(),
+            self.os_codename.clone(),
+            self.search_input.clone(),
+            self.search_sort_mode,
+            self.wayland_filter,
         )
     }
 

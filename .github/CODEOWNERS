@@ -1,0 +1,31 @@
+# CODEOWNERS file for cosmic-store fork
+# This file defines who should review changes to specific parts of the codebase
+
+# Default owner for everything
+* @shipdocs
+
+# Wayland compatibility features
+src/os_info.rs @shipdocs
+src/ui/badges.rs @shipdocs
+res/mock-appstream-wayland.xml @shipdocs
+
+# Search and filtering
+src/search.rs @shipdocs
+src/search_logic.rs @shipdocs
+src/stats.rs @shipdocs
+
+# Performance optimizations
+src/appstream_cache.rs @shipdocs
+
+# Refactoring and modularization
+src/pages/ @shipdocs
+src/backend/ @shipdocs
+src/ui/ @shipdocs
+
+# GitHub Actions and CI/CD
+.github/workflows/ @shipdocs
+
+# Build configuration
+Cargo.toml @shipdocs
+Cargo.lock @shipdocs
+

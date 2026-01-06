@@ -5,30 +5,21 @@ mod views;
 use cosmic::{
     Application, ApplicationExt, Element, action,
     app::{Core, Task, context_drawer},
-    cosmic_config::{self, CosmicConfigEntry},
+    cosmic_config::{self},
     cosmic_theme, executor,
     iced::{
         Alignment, Length, Size, Subscription,
-        event::{self, Event},
-        futures::{self, SinkExt},
-        keyboard::{Event as KeyEvent, Key, key},
-        stream,
         widget::scrollable,
-        window::{self, Event as WindowEvent},
+        window::{self},
     },
     theme,
     widget::{self},
 };
 use rayon::prelude::*;
 use std::{
-    any::TypeId,
     cell::Cell,
     cmp,
     collections::{BTreeMap, BTreeSet, HashMap, VecDeque},
-    env,
-    future::pending,
-    path::Path,
-    process,
     sync::{Arc, Mutex},
     time::Instant,
 };
@@ -39,30 +30,25 @@ use crate::app_info::{AppInfo, AppProvide};
 use crate::backend::{self, Backends, Package};
 use crate::category::Category;
 use crate::cli::Flags;
-use crate::config::{AppTheme, CONFIG_VERSION, Config};
+use crate::config::{AppTheme, Config};
 use crate::constants::MAX_GRID_WIDTH;
-use crate::gstreamer::{GStreamerCodec, GStreamerExitCode, Mode};
+use crate::gstreamer::{GStreamerExitCode, Mode};
 
 use crate::key_bind::{KeyBind, key_binds};
 use crate::localize::LANGUAGE_SORTER;
-#[cfg(feature = "logind")]
-use crate::logind;
 use crate::pages::{ContextPage, DialogPage, ExplorePage, NavPage};
 use crate::pages::{DetailsPage, DetailsPageActions, SelectedSource};
 use crate::search::{SearchResult, SearchSortMode, WaylandFilter};
 use crate::ui::{GridMetrics, package_card_view};
-#[cfg(feature = "wayland")]
-use cosmic_panel_config::CosmicPanelConfig;
 
 use crate::fl;
 
 use crate::message::{Action, Message};
-use crate::operation::{Operation, OperationKind, RepositoryRemoveError};
+use crate::operation::{Operation, OperationKind};
 use crate::os_info::OsInfo;
 use crate::priority::priority;
 use crate::scroll_context::ScrollContext;
 use crate::source::{Source, SourceKind};
-use crate::url_handlers;
 
 // impl Package is here.
 

@@ -4,7 +4,7 @@ use crate::operation::{Operation, OperationKind, RepositoryRemoveError};
 use crate::pages::{DialogPage, NavPage};
 use cosmic::app::Task;
 use cosmic::cosmic_config::CosmicConfigEntry;
-use cosmic::iced::futures::{SinkExt, StreamExt};
+use cosmic::iced::futures::SinkExt;
 use cosmic::iced::keyboard::{self, Key};
 use cosmic::iced::window;
 use cosmic::iced::{Subscription, futures, stream};
@@ -382,9 +382,6 @@ pub fn update(app: &mut App, message: Message) -> Task<Message> {
 }
 
 pub fn subscription(app: &App) -> Subscription<Message> {
-    struct ConfigSubscription;
-    struct ThemeSubscription;
-
     let mut subscriptions = vec![
         cosmic::iced::event::listen_with(|event, status, _window_id| match event {
             cosmic::iced::event::Event::Keyboard(cosmic::iced::keyboard::Event::KeyPressed {

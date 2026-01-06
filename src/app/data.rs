@@ -1,5 +1,4 @@
 use crate::AppId;
-use crate::app::App;
 use crate::app_entry::Apps;
 use crate::app_info::WaylandCompatibility;
 use crate::backend::Backends;

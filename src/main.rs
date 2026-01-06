@@ -186,6 +186,7 @@ impl Package {
         top_controls: Option<Vec<Element<'a, Message>>>,
         spacing: &cosmic_theme::Spacing,
         width: usize,
+        app_stats: &'a std::collections::HashMap<crate::app_id::AppId, (u64, Option<crate::app_info::WaylandCompatibility>)>,
     ) -> Element<'a, Message> {
         package_card_view(
             &self.info,
@@ -194,6 +195,7 @@ impl Package {
             top_controls,
             spacing,
             width,
+            app_stats,
         )
     }
 }
@@ -1903,6 +1905,7 @@ impl App {
             spacing,
             grid_width,
             Message::SelectSearchResult,
+            &self.app_stats,
         ));
 
         column.into()
@@ -1947,6 +1950,7 @@ impl App {
                             spacing,
                             grid_width,
                             move |result_i| Message::SelectExploreResult(explore_page, result_i),
+                            &self.app_stats,
                         ));
                     }
                     None => {
@@ -2041,6 +2045,7 @@ impl App {
                                     |result_i| {
                                         Message::SelectExploreResult(*explore_page, result_i)
                                     },
+                                    &self.app_stats,
                                 ));
                             }
                             _ => {}
@@ -2098,6 +2103,7 @@ impl App {
                             None,
                             &spacing,
                             item_width,
+                            &self.app_stats,
                         ))
                         .on_press(Message::SelectInstalled(installed_i)),
                     );
@@ -2241,6 +2247,7 @@ impl App {
                                 Some(top_controls),
                                 &spacing,
                                 item_width,
+                                &self.app_stats,
                             ))
                             .on_press(Message::SelectUpdates(updates_i)),
                         );
@@ -2328,6 +2335,7 @@ impl App {
                     spacing,
                     grid_width,
                     Message::SelectCategoryResult,
+                    &self.app_stats,
                 ));
             }
             None => {
@@ -2344,7 +2352,7 @@ impl App {
         let grid_width = (size.width - 2.0 * space_s as f32).floor().max(0.0) as usize;
 
         match &self.details_page_opt {
-            Some(details_page) => details_page.view(self, spacing, grid_width),
+            Some(details_page) => details_page.view(self, spacing, grid_width, &self.app_stats),
             None => match &self.search_results {
                 Some((input, results)) => {
                     self.view_search_results(input, results, spacing, grid_width)

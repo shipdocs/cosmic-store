@@ -8,7 +8,7 @@ use cosmic::{Element, Task, cosmic_theme, theme, widget};
 
 use crate::Message;
 use crate::app_id::AppId;
-use crate::app_info::{AppFramework, AppInfo, AppUrl, RiskLevel, WaylandSupport};
+use crate::app_info::{AppFramework, AppInfo, AppUrl, RiskLevel, WaylandSupport, WaylandCompatibility};
 use crate::constants::ICON_SIZE_DETAILS;
 use crate::fl;
 use crate::icon_cache::icon_cache_handle;
@@ -82,6 +82,7 @@ impl DetailsPage {
         actions: &'a impl DetailsPageActions,
         spacing: cosmic_theme::Spacing,
         grid_width: usize,
+        app_stats: &'a HashMap<AppId, (u64, Option<WaylandCompatibility>)>,
     ) -> Element<'a, Message> {
         let cosmic_theme::Spacing {
             space_l: _,
@@ -115,7 +116,7 @@ impl DetailsPage {
 
         let mut title_row_children = vec![widget::text::title2(&self.info.name).into()];
         if self.info.source_id == "flathub" {
-            if let Some(badge) = wayland_compat_badge(&self.info, 24) {
+            if let Some(badge) = wayland_compat_badge(&self.info, 24, app_stats) {
                 title_row_children
                     .push(widget::Space::with_width(Length::Fixed(space_xs.into())).into());
                 title_row_children.push(badge);

@@ -5,8 +5,10 @@ use cosmic::cosmic_theme;
 use cosmic::iced::{Alignment, Border, Color, Length};
 use cosmic::theme;
 use cosmic::widget;
+use std::collections::HashMap;
 
-use crate::app_info::AppInfo;
+use crate::app_id::AppId;
+use crate::app_info::{AppInfo, WaylandCompatibility};
 use crate::constants::ICON_SIZE_PACKAGE;
 use crate::ui::badges::wayland_compat_badge;
 
@@ -56,10 +58,11 @@ pub fn package_card_view<'a>(
     top_controls: Option<Vec<Element<'a, Message>>>,
     spacing: &cosmic_theme::Spacing,
     width: usize,
+    app_stats: &'a HashMap<AppId, (u64, Option<WaylandCompatibility>)>,
 ) -> Element<'a, Message> {
     // Only show compatibility badge for Flathub apps (only they have the data)
     let compat_badge = if info.source_id == "flathub" {
-        wayland_compat_badge(info, 16)
+        wayland_compat_badge(info, 16, app_stats)
     } else {
         None
     };

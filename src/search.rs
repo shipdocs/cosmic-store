@@ -4,10 +4,11 @@ use cosmic::Element;
 use cosmic::cosmic_theme;
 use cosmic::iced::{Alignment, Length};
 use cosmic::widget;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::app_id::AppId;
-use crate::app_info::AppInfo;
+use crate::app_info::{AppInfo, WaylandCompatibility};
 use crate::constants::ICON_SIZE_SEARCH;
 use crate::editors_choice::EDITORS_CHOICE;
 use crate::icon_cache::icon_cache_handle;
@@ -85,6 +86,7 @@ impl SearchResult {
         spacing: cosmic_theme::Spacing,
         width: usize,
         callback: F,
+        app_stats: &'a HashMap<AppId, (u64, Option<WaylandCompatibility>)>,
     ) -> Element<'a, Message> {
         let GridMetrics {
             cols,
@@ -100,7 +102,7 @@ impl SearchResult {
                 col = 0;
             }
             grid = grid.push(
-                widget::mouse_area(result.card_view(&spacing, item_width))
+                widget::mouse_area(result.card_view(&spacing, item_width, app_stats))
                     .on_press(callback(result_i)),
             );
             col += 1;
@@ -115,6 +117,7 @@ impl SearchResult {
         &'a self,
         spacing: &cosmic_theme::Spacing,
         width: usize,
+        app_stats: &'a HashMap<AppId, (u64, Option<WaylandCompatibility>)>,
     ) -> Element<'a, Message> {
         use cosmic::theme;
         use cosmic::widget;
@@ -126,7 +129,7 @@ impl SearchResult {
         let is_verified = self.info.verified;
 
         // Always show a compatibility badge - every app gets a status indicator
-        let compat_badge = wayland_compat_badge(&self.info, 16);
+        let compat_badge = wayland_compat_badge(&self.info, 16, app_stats);
 
         let mut name_row = vec![];
         name_row.push(

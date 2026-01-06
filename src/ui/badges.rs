@@ -3,9 +3,10 @@
 use cosmic::iced::Color;
 use cosmic::widget;
 use cosmic::Element;
+use std::collections::HashMap;
 
-use crate::app_info::AppInfo;
-use crate::app_info::{RiskLevel, WaylandSupport};
+use crate::app_id::AppId;
+use crate::app_info::{AppInfo, RiskLevel, WaylandCompatibility, WaylandSupport};
 use crate::icon_cache::icon_cache_handle;
 
 // Import Message type and fl macro from main
@@ -32,8 +33,24 @@ fn styled_badge_icon<'a>(
 ///
 /// Shows a visual indicator of how well an app supports Wayland,
 /// with appropriate colors and tooltips explaining the support level.
-pub fn wayland_compat_badge<'a>(info: &'a AppInfo, icon_size: u16) -> Option<Element<'a, Message>> {
-    let compat_badge = if let Some(compat) = info.wayland_compat_lazy() {
+///
+/// # Arguments
+/// * `info` - The app information
+/// * `icon_size` - Size of the badge icon
+/// * `app_stats` - HashMap of app stats including Wayland compatibility data
+pub fn wayland_compat_badge<'a>(
+    info: &'a AppInfo,
+    icon_size: u16,
+    app_stats: &'a HashMap<AppId, (u64, Option<WaylandCompatibility>)>,
+) -> Option<Element<'a, Message>> {
+    // First try to get Wayland compatibility from app_stats (loaded from Flathub)
+    let compat = app_stats
+        .get(&AppId::new(&info.desktop_ids.first().cloned().unwrap_or_default()))
+        .and_then(|(_, compat)| compat.as_ref())
+        .copied()
+        .or_else(|| info.wayland_compat_lazy());
+
+    let compat_badge = if let Some(compat) = compat {
         match compat.risk_level {
             RiskLevel::Low => {
                 Some(widget::tooltip(

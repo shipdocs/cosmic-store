@@ -10,44 +10,30 @@ This fork adds features specifically designed for Pop!_OS Wayland users:
 - **Performance Optimizations** - Faster app loading and searching
 - **Code Improvements** - Better code organization and maintainability
 
-## ✨ Key Features
+## 🌳 Branch Structure
 
-### Wayland Compatibility Detection
-- Automatic detection of Wayland compatibility for applications
-- Visual badges showing compatibility status
-- Filter apps by Wayland support
+- **`master`** (this branch) - Clean, synced with upstream
+- **`develop`** ⭐ - Your enhanced version with all features
 
-### Enhanced Search & Filtering
-- Filter applications by download count
-- Filter by Wayland compatibility status
-- Improved search performance with batch optimization
+**To use the enhanced version:**
+```bash
+git checkout develop
+cargo build --release
+```
 
-### Performance Improvements
-- Optimized XML parsing for faster app loading
-- Async stats loading for better responsiveness
-- Batch search optimization for explore pages
-- Parallel icon loading for search results
+## ✨ Features
 
-### Code Quality
-- Modularized codebase with clear separation of concerns
-- Extracted pages, UI components, and backend logic
-- Improved error handling and logging
-- Comprehensive refactoring for maintainability
+See **[FEATURES.md](FEATURES.md)** for detailed information about all enhancements in the `develop` branch, including:
+- Wayland Compatibility Detection
+- Enhanced Search & Filtering
+- Performance Optimizations
+- Code Refactoring & Modularization
+- AppStream Optimization
+- Documentation & Cleanup
 
 ## 🔄 Relationship to Upstream
 
-This fork maintains compatibility with the upstream [pop-os/cosmic-store](https://github.com/pop-os/cosmic-store) project. All enhancements are organized in feature branches, making it easy for upstream maintainers to cherry-pick features if desired.
-
-**Master branch:** Stays in sync with upstream for easy merging
-**Feature branches:** Contain specific enhancements (see below)
-
-## 📦 Feature Branches
-
-- `feature/wayland-compatibility` - Wayland detection and badges
-- `feature/search-filters` - Download count and compatibility filters
-- `feature/performance-optimizations` - Performance improvements
-- `feature/refactoring` - Code organization and modularization
-- `feature/documentation-cleanup` - Documentation improvements
+This fork maintains compatibility with the upstream [pop-os/cosmic-store](https://github.com/pop-os/cosmic-store) project. The `master` branch stays in sync with upstream for easy merging if desired.
 
 ## 🚀 Building & Running
 

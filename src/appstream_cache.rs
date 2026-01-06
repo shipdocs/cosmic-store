@@ -73,9 +73,6 @@ fn extract_wayland_bitcode(element: &xmltree::Element) -> Option<WaylandCompatib
     None
 }
 
-/// Sanitize category elements by stripping trailing punctuation.
-///
-
 const PREFIXES: &[&str] = &["/usr/share", "/var/lib", "/var/cache"];
 const CATALOGS: &[&str] = &["swcatalog", "app-info"];
 

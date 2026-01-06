@@ -1,13 +1,46 @@
-# cosmic-store
-WIP COSMIC Store
+# COSMIC Store - Enhanced Fork
 
-Fork of POP OS cosmic store
--adds search filtering based on number of downloads (popularity).
--adds wayland compatibility indicators. The compatiblity indicators are a best effort as not enough data is available. Includes filtering search results on expected compatibility.
- But since there is a new focus in the community to update and maintain meta data for flathub, this should improve over time, it at least give an informed idea if an application will work well.
- In the end maintainers should have an incentive to update meta, meta is nice to have for the community.
--Cleaned up all/much warnings, unused code etc, no linting errors or build warnings/errors.
--Working on chewing up main.rs to a managable file instead of keeping it a god file.
+An enhanced fork of [COSMIC Store](https://github.com/pop-os/cosmic-store) with additional features for Wayland compatibility and improved search capabilities.
+
+## 🎯 Fork Purpose
+
+This fork adds features specifically designed for Pop!_OS Wayland users:
+- **Wayland Compatibility Information** - See which apps work fully on Wayland
+- **Enhanced Search Filters** - Filter by download count and Wayland compatibility
+- **Performance Optimizations** - Faster app loading and searching
+- **Code Improvements** - Better code organization and maintainability
+
+## 🌳 Branch Structure
+
+- **`master`** - Clean, synced with upstream (for upstream compatibility)
+- **`develop`** ⭐ - Your enhanced version with all features (use this!)
+
+## ✨ Features
+
+See **[FEATURES.md](FEATURES.md)** for detailed information about:
+1. Wayland Compatibility Detection
+2. Enhanced Search & Filtering
+3. Performance Optimizations
+4. Code Refactoring & Modularization
+5. AppStream Optimization
+6. Documentation & Cleanup
+
+## 🚀 Quick Start
+
+```bash
+# Use the enhanced version
+git checkout develop
+cargo build --release
+cargo run --release
+```
+
+## 🔄 Relationship to Upstream
+
+This fork maintains compatibility with the upstream [pop-os/cosmic-store](https://github.com/pop-os/cosmic-store) project. The `master` branch stays in sync with upstream for easy merging if desired.
+
+## 📄 License
+
+Licensed under the same terms as the upstream project (see LICENSE file).
 
 
 

@@ -69,26 +69,25 @@ pub fn render_category_page<'a>(
         .spacing(space_xxs)
         .width(Length::Fill);
     column = column.push(widget::text::title2(nav_page.title()));
-    if matches!(nav_page, NavPage::Applets) {
-        if !sources.is_empty()
-            && sources
-                .iter()
-                .any(|source| matches!(source.kind, SourceKind::Recommended { enabled: false, .. }))
-        {
-            column = column.push(
-                widget::column::with_children(vec![
-                    widget::Space::with_height(space_m).into(),
-                    widget::text(fl!("enable-flathub-cosmic")).into(),
-                    widget::Space::with_height(space_m).into(),
-                    widget::button::standard(fl!("manage-repositories"))
-                        .on_press(Message::ToggleContextPage(ContextPage::Repositories))
-                        .into(),
-                    widget::Space::with_height(space_l).into(),
-                ])
-                .align_x(Alignment::Center)
-                .width(Length::Fill),
-            );
-        }
+    if matches!(nav_page, NavPage::Applets)
+        && !sources.is_empty()
+        && sources
+            .iter()
+            .any(|source| matches!(source.kind, SourceKind::Recommended { enabled: false, .. }))
+    {
+        column = column.push(
+            widget::column::with_children(vec![
+                widget::Space::with_height(space_m).into(),
+                widget::text(fl!("enable-flathub-cosmic")).into(),
+                widget::Space::with_height(space_m).into(),
+                widget::button::standard(fl!("manage-repositories"))
+                    .on_press(Message::ToggleContextPage(ContextPage::Repositories))
+                    .into(),
+                widget::Space::with_height(space_l).into(),
+            ])
+            .align_x(Alignment::Center)
+            .width(Length::Fill),
+        );
     }
     //TODO: ensure category matches?
     match category_results {
@@ -683,6 +682,7 @@ pub fn render_footer<'a>(
     Some(container.into())
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn render_header_start<'a>(
     mode: &Mode,
     search_active: bool,
@@ -832,8 +832,7 @@ pub fn render_gstreamer_view<'a>(
                 GStreamerExitCode::Error
             };
             dialog = dialog.secondary_action(
-                widget::button::standard(fl!("close"))
-                    .on_press(Message::GStreamerExit(code)),
+                widget::button::standard(fl!("close")).on_press(Message::GStreamerExit(code)),
             );
         }
     } else {
@@ -847,20 +846,16 @@ pub fn render_gstreamer_view<'a>(
                                 widget::row::with_children(vec![
                                     widget::column::with_children(vec![
                                         widget::text::body(&result.info.name).into(),
-                                        widget::text::caption(&result.info.summary)
-                                            .into(),
+                                        widget::text::caption(&result.info.summary).into(),
                                     ])
                                     .into(),
                                     widget::horizontal_space().into(),
                                     if selected.contains(&i) {
-                                        widget::icon::from_name(
-                                            "checkbox-checked-symbolic",
-                                        )
-                                        .size(16)
-                                        .into()
-                                    } else {
-                                        widget::Space::with_width(Length::Fixed(16.0))
+                                        widget::icon::from_name("checkbox-checked-symbolic")
+                                            .size(16)
                                             .into()
+                                    } else {
+                                        widget::Space::with_width(Length::Fixed(16.0)).into()
                                     },
                                 ])
                                 .spacing(space_s)

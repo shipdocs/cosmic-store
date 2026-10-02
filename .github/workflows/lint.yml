@@ -2,9 +2,13 @@ name: Lint and Format Check
 
 on:
   push:
-    branches: [ master, develop, feature/*, perf/* ]
+    branches: [ master, develop ]
   pull_request:
     branches: [ master, develop, feature/*, perf/* ]
+
+concurrency:
+  group: store-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   lint:

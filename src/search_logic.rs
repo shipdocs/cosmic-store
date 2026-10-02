@@ -705,6 +705,87 @@ mod tests {
         apps
     }
 
+    #[derive(Debug)]
+    struct UnavailableSystemBackend;
+
+    impl crate::backend::Backend for UnavailableSystemBackend {
+        fn load_caches(&mut self, _: bool) -> Result<(), Box<dyn std::error::Error>> {
+            Ok(())
+        }
+        fn info_caches(&self) -> &[crate::AppstreamCache] {
+            &[]
+        }
+        fn installed(&self) -> Result<Vec<crate::backend::Package>, Box<dyn std::error::Error>> {
+            Ok(Vec::new())
+        }
+        fn updates(&self) -> Result<Vec<crate::backend::Package>, Box<dyn std::error::Error>> {
+            Ok(Vec::new())
+        }
+        fn file_packages(
+            &self,
+            _: &str,
+        ) -> Result<Vec<crate::backend::Package>, Box<dyn std::error::Error>> {
+            Ok(Vec::new())
+        }
+        fn operation(
+            &self,
+            _: &crate::Operation,
+            _: Box<dyn FnMut(f32) + 'static>,
+        ) -> Result<(), Box<dyn std::error::Error>> {
+            Ok(())
+        }
+        fn is_package_available(&self, _: &[String]) -> bool {
+            false
+        }
+    }
+
+    #[test]
+    fn unavailable_system_source_falls_back_to_available_flatpak() {
+        let info = Arc::new(AppInfo {
+            name: "Example".to_string(),
+            pkgnames: vec!["example".to_string()],
+            origin_opt: Some("zorin".to_string()),
+            ..AppInfo::default()
+        });
+        let id = AppId::new("org.example.App");
+        let mut apps = Apps::new();
+        apps.insert(
+            id.clone(),
+            vec![
+                AppEntry {
+                    backend_name: "packagekit",
+                    info: info.clone(),
+                    installed: false,
+                },
+                AppEntry {
+                    backend_name: "flatpak-system",
+                    info,
+                    installed: false,
+                },
+            ],
+        );
+        let mut backends = Backends::new();
+        backends.insert("packagekit", Arc::new(UnavailableSystemBackend));
+        let results = search_results(
+            &apps,
+            &backends,
+            &HashMap::new(),
+            "noble",
+            "Example",
+            SearchSortMode::Relevance,
+            WaylandFilter::All,
+        );
+        assert_eq!(results[0].backend_name(), "flatpak-system");
+        let discovery = explore_results_all(&apps, &backends, &HashMap::new(), "noble", 0);
+        assert_eq!(
+            discovery[&ExplorePage::PopularApps][0].backend_name(),
+            "flatpak-system"
+        );
+        apps.get_mut(&id).unwrap()[0].installed = true;
+        let installed = installed_results_data(&apps, &backends, &HashMap::new(), "noble");
+        assert_eq!(installed[0].backend_name(), "packagekit");
+    }
+
     #[test]
     fn zorin_origin_is_visible_in_search_and_discovery() {
         let info = AppInfo {

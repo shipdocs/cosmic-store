@@ -42,7 +42,9 @@ pub fn generic_search<
     let mut results: Vec<SearchResult> = apps
         .par_iter()
         .filter_map(|(id, infos)| {
-            let (stats_downloads, stats_compat) = app_stats.get(id).cloned().unwrap_or((0, None));
+            let stats = app_stats.get(id);
+            let stats_downloads = stats.map(|(downloads, _)| *downloads);
+            let stats_compat = stats.and_then(|(_, compatibility)| *compatibility);
 
             let mut best_weight: Option<i64> = None;
             for AppEntry {
@@ -70,7 +72,7 @@ pub fn generic_search<
                 }
 
                 if let Some(weight) =
-                    filter_map(id, info, *installed, Some(stats_downloads), stats_compat)
+                    filter_map(id, info, *installed, stats_downloads, stats_compat)
                 {
                     if let Some(prev_weight) = best_weight {
                         if prev_weight <= weight {
@@ -628,7 +630,7 @@ pub fn explore_results_all(
 
     // Single pass over all apps
     for (id, infos) in apps.iter() {
-        let (stats_downloads, _stats_compat) = app_stats.get(id).cloned().unwrap_or((0, None));
+        let stats_downloads = app_stats.get(id).map(|(downloads, _)| *downloads);
 
         // Use first info as it is preferred
         let Some(AppEntry {
@@ -650,7 +652,7 @@ pub fn explore_results_all(
             }
         }
 
-        let downloads = stats_downloads;
+        let downloads = stats_downloads.unwrap_or(info.monthly_downloads);
 
         // Check all explore pages for this app
         for explore_page in ExplorePage::all().iter() {
@@ -676,4 +678,72 @@ pub fn explore_results_all(
     }
 
     results_map
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app_id::AppId;
+    use crate::app_info::AppInfo;
+    use std::collections::HashMap;
+    use std::sync::Arc;
+
+    fn sample_apps() -> Apps {
+        let mut apps = Apps::new();
+        for (id, name, downloads) in [
+            ("org.example.Alpha", "Alpha", 10),
+            ("org.example.Zulu", "Zulu", 100),
+        ] {
+            let info = AppInfo {
+                name: name.to_string(),
+                kind: AppKind::DesktopApplication,
+                monthly_downloads: downloads,
+                ..AppInfo::default()
+            };
+            apps.insert(
+                AppId::new(id),
+                vec![AppEntry {
+                    backend_name: "flatpak-system",
+                    info: Arc::new(info),
+                    installed: false,
+                }],
+            );
+        }
+        apps
+    }
+
+    #[test]
+    fn discovery_preserves_popularity_without_external_stats() {
+        let results = explore_results_all(
+            &sample_apps(),
+            &Backends::new(),
+            &HashMap::new(),
+            "noble",
+            0,
+        );
+        assert_eq!(results[&ExplorePage::PopularApps][0].info.name, "Zulu");
+        assert_eq!(results[&ExplorePage::PopularApps][0].weight, -100);
+    }
+
+    #[test]
+    fn explicit_zero_downloads_override_metadata() {
+        let mut stats = HashMap::new();
+        stats.insert(AppId::new("org.example.Zulu"), (0, None));
+        let results = explore_results_all(&sample_apps(), &Backends::new(), &stats, "noble", 0);
+        assert_eq!(results[&ExplorePage::PopularApps][0].info.name, "Alpha");
+    }
+
+    #[test]
+    fn search_preserves_popularity_without_external_stats() {
+        let results = search_results(
+            &sample_apps(),
+            &Backends::new(),
+            &HashMap::new(),
+            "noble",
+            "",
+            SearchSortMode::Relevance,
+            WaylandFilter::All,
+        );
+        assert_eq!(results[0].info.name, "Zulu");
+    }
 }

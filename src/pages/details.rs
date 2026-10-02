@@ -217,9 +217,10 @@ impl DetailsPage {
             {
                 let mut button =
                     widget::button::icon(widget::icon::from_name("go-previous-symbolic").size(16));
-                let index = self.screenshot_shown.checked_sub(1).unwrap_or_else(|| {
-                    self.info.screenshots.len().saturating_sub(1)
-                });
+                let index = self
+                    .screenshot_shown
+                    .checked_sub(1)
+                    .unwrap_or_else(|| self.info.screenshots.len().saturating_sub(1));
                 if index != self.screenshot_shown {
                     button = button.on_press(Message::SelectedScreenshotShown(index));
                 }

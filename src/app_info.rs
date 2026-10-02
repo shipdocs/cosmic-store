@@ -618,59 +618,39 @@ impl AppInfo {
             }
         }
 
-        if !self.flatpak_refs.is_empty() {
-            return self.heuristic_wayland_compat();
-        }
-
         None
     }
+}
 
-    fn heuristic_wayland_compat(&self) -> Option<WaylandCompatibility> {
-        let categories_lower: Vec<String> =
-            self.categories.iter().map(|c| c.to_lowercase()).collect();
+#[cfg(test)]
+mod compatibility_tests {
+    use super::*;
 
-        let name_lower = self.name.to_lowercase();
-        let dev_lower = self.developer_name.to_lowercase();
-
-        if categories_lower
-            .iter()
-            .any(|c| c.contains("gnome") || c.contains("gtk"))
-            || dev_lower.contains("gnome")
-            || name_lower.contains("gnome")
-        {
-            return Some(WaylandCompatibility {
-                support: WaylandSupport::Native,
-                framework: AppFramework::GTK3,
-                risk_level: RiskLevel::Low,
-            });
+    #[test]
+    fn app_names_and_categories_do_not_certify_wayland_support() {
+        for name in ["GNOME Example", "KDE Example", "Electron Example"] {
+            let info = AppInfo {
+                name: name.to_string(),
+                developer_name: name.to_string(),
+                categories: vec!["GNOME".to_string(), "KDE".to_string()],
+                flatpak_refs: vec!["org.shipdocs.UninstalledTestApplication".to_string()],
+                ..AppInfo::default()
+            };
+            assert_eq!(info.wayland_compat_lazy(), None);
         }
+    }
 
-        if categories_lower
-            .iter()
-            .any(|c| c.contains("kde") || c.contains("qt"))
-            || dev_lower.contains("kde")
-            || name_lower.contains("kde")
-        {
-            return Some(WaylandCompatibility {
-                support: WaylandSupport::Native,
-                framework: AppFramework::Qt6,
-                risk_level: RiskLevel::Medium,
-            });
-        }
-
-        if name_lower.contains("electron")
-            || self
-                .desktop_ids
-                .iter()
-                .any(|id| id.to_lowercase().contains("electron"))
-        {
-            return Some(WaylandCompatibility {
-                support: WaylandSupport::Native,
-                framework: AppFramework::Electron,
-                risk_level: RiskLevel::High,
-            });
-        }
-
-        None
+    #[test]
+    fn explicit_compatibility_metadata_is_preserved() {
+        let compatibility = WaylandCompatibility {
+            support: WaylandSupport::Fallback,
+            framework: AppFramework::Unknown,
+            risk_level: RiskLevel::Medium,
+        };
+        let info = AppInfo {
+            wayland_compat: Some(compatibility),
+            ..AppInfo::default()
+        };
+        assert_eq!(info.wayland_compat_lazy(), Some(compatibility));
     }
 }

@@ -169,14 +169,13 @@ impl Packagekit {
 
         let tx = self.transaction()?;
         tx.get_packages(FilterKind::Arch as u64)?;
-        let packages = self.package_transaction(tx)?;
-
-        let mut available = HashSet::new();
-        for package in packages {
-            for pkgname in &package.info.pkgnames {
-                available.insert(pkgname.clone());
-            }
-        }
+        // Availability needs package names only. Do not construct app cards, load
+        // thousands of icons, or build a huge system-packages description here.
+        let (_, packages) = transaction_handle(tx, |_, _| {})?;
+        let available = packages
+            .into_iter()
+            .filter_map(|package| package.package_id.split(';').next().map(str::to_owned))
+            .collect::<HashSet<_>>();
 
         log::info!(
             "Built available packages cache with {} packages in {:?}",

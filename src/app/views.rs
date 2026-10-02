@@ -417,7 +417,7 @@ pub fn render_explore_page<'a>(
                             .align_x(Alignment::Center),
                         )
                         .width(Length::Fill)
-                        .height(Length::Fixed(viewport_height))
+                        .height(Length::Fixed(viewport_height.min(320.0)))
                         .align_x(Alignment::Center)
                         .align_y(Alignment::Center),
                     );
@@ -477,7 +477,7 @@ pub fn render_explore_page<'a>(
                         .align_x(Alignment::Center),
                     )
                     .width(Length::Fill)
-                    .height(Length::Fixed(viewport_height))
+                    .height(Length::Fixed(viewport_height.min(320.0)))
                     .align_x(Alignment::Center)
                     .align_y(Alignment::Center),
                 );
@@ -732,56 +732,24 @@ pub fn render_footer<'a>(
 #[allow(clippy::too_many_arguments)]
 pub fn render_header_start<'a>(
     mode: &Mode,
-    search_active: bool,
+    _search_active: bool,
     search_input: &'a str,
     search_id: widget::Id,
     _search_sort_options: &'a [String],
     _search_sort_mode: crate::search::SearchSortMode,
-    wayland_filter_options: &'a [String],
-    wayland_filter: WaylandFilter,
+    _wayland_filter_options: &'a [String],
+    _wayland_filter: WaylandFilter,
 ) -> Vec<Element<'a, Message>> {
     match mode {
-        Mode::Normal => {
-            if search_active {
-                vec![
-                    widget::text_input::search_input("", search_input)
-                        .width(Length::Fixed(240.0))
-                        .id(search_id)
-                        .on_clear(Message::SearchClear)
-                        .on_input(Message::SearchInput)
-                        .on_submit(Message::SearchSubmit)
-                        .into(),
-                    widget::dropdown(
-                        wayland_filter_options,
-                        Some(match wayland_filter {
-                            WaylandFilter::All => 0,
-                            WaylandFilter::Excellent => 1,
-                            WaylandFilter::Good => 2,
-                            WaylandFilter::Caution => 3,
-                            WaylandFilter::Limited => 4,
-                            WaylandFilter::Unknown => 5,
-                        }),
-                        |index| match index {
-                            0 => Message::WaylandFilter(WaylandFilter::All),
-                            1 => Message::WaylandFilter(WaylandFilter::Excellent),
-                            2 => Message::WaylandFilter(WaylandFilter::Good),
-                            3 => Message::WaylandFilter(WaylandFilter::Caution),
-                            4 => Message::WaylandFilter(WaylandFilter::Limited),
-                            _ => Message::WaylandFilter(WaylandFilter::Unknown),
-                        },
-                    )
-                    .width(Length::Fixed(200.0))
-                    .into(),
-                ]
-            } else {
-                vec![
-                    widget::button::icon(widget::icon::from_name("system-search-symbolic"))
-                        .on_press(Message::SearchActivate)
-                        .padding(8)
-                        .into(),
-                ]
-            }
-        }
+        Mode::Normal => vec![
+            widget::text_input::search_input(fl!("search-store"), search_input)
+                .width(Length::Fixed(260.0))
+                .id(search_id)
+                .on_clear(Message::SearchClear)
+                .on_input(Message::SearchInput)
+                .on_submit(Message::SearchSubmit)
+                .into(),
+        ],
         Mode::GStreamer { .. } => Vec::new(),
     }
 }

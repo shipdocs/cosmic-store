@@ -117,6 +117,7 @@ pub fn handle_search_message(app: &mut App, message: Message) -> Task<Message> {
         }
         Message::SearchInput(input) => {
             if input != app.search_input {
+                app.search_active = !input.is_empty();
                 app.results_limit = crate::constants::MAX_RESULTS;
                 app.search_input = input;
                 if !app.search_input.is_empty() {
@@ -143,6 +144,7 @@ pub fn handle_search_message(app: &mut App, message: Message) -> Task<Message> {
         Message::SearchResults(input, mut results, auto_select) => {
             if input == app.search_input {
                 app.filter_store_results(&mut results);
+                log::info!("search {:?} ready: {} results", input, results.len());
                 app.load_icons_for_results(&mut results);
 
                 app.details_page_opt = None;

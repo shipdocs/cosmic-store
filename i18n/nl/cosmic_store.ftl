@@ -148,3 +148,5 @@ game-launcher-help = Installeer hier je launcher en ontdek en speel daarna via d
 steam-required = Installeer eerst Steam en kom daarna terug naar deze game.
 steam-get-client = Steam zoeken en installeren
 steam-ready = Steam is beschikbaar en regelt eigendom en installatie.
+
+search-store = Zoek apps en games

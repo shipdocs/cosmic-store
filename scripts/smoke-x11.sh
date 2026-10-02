@@ -48,11 +48,11 @@ xdotool windowfocus "$window_id"
 xdotool key --window "$window_id" ctrl+f
 xdotool type --window "$window_id" --delay 100 'gimp'
 for attempt in $(seq 1 20); do
-    if grep -Eq 'searched for "gimp".*found [1-9][0-9]* results' "$output/startup.log"; then break; fi
+    if grep -Eq 'search "gimp" ready: [1-9][0-9]* results' "$output/startup.log"; then break; fi
     kill -0 "$app_pid"
     sleep 1
 done
-grep -Eq 'searched for "gimp".*found [1-9][0-9]* results' "$output/startup.log"
+grep -Eq 'search "gimp" ready: [1-9][0-9]* results' "$output/startup.log"
 sleep 2
 import -window "$window_id" "$output/search-gimp.png"
 xdotool key --window "$window_id" ctrl+a

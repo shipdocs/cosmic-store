@@ -66,6 +66,14 @@ pub fn handle_config_message(app: &mut App, message: Message) -> Task<Message> {
 pub fn handle_search_message(app: &mut App, message: Message) -> Task<Message> {
     match message {
         Message::CategoryResults(categories, mut results) => {
+            if app
+                .nav_model
+                .active_data::<NavPage>()
+                .and_then(NavPage::categories)
+                != Some(categories)
+            {
+                return Task::none();
+            }
             app.filter_store_results(&mut results);
             app.load_icons_for_results(&mut results);
             app.category_results = Some((categories, results));
@@ -78,38 +86,91 @@ pub fn handle_search_message(app: &mut App, message: Message) -> Task<Message> {
         Message::SearchClear => {
             app.search_active = false;
             app.search_input.clear();
+            app.search_pending = false;
             if app.search_results.take().is_some() {
                 app.update_scroll()
             } else {
                 Task::none()
             }
         }
+        Message::FindApp(input) => {
+            app.details_page_opt = None;
+            app.search_active = true;
+            app.store_source = crate::search::StoreSource::All;
+            app.native_only = true;
+            app.search_input = input;
+            app.results_limit = crate::constants::MAX_RESULTS;
+            app.search()
+        }
+        Message::ShowMore => {
+            app.results_limit = app
+                .results_limit
+                .saturating_add(crate::constants::MAX_RESULTS);
+            Task::none()
+        }
+        Message::ResetFilters => {
+            app.store_source = crate::search::StoreSource::All;
+            app.native_only = true;
+            app.search_sort_mode = crate::search::SearchSortMode::Relevance;
+            app.wayland_filter = crate::search::WaylandFilter::All;
+            app.results_limit = crate::constants::MAX_RESULTS;
+            app.refresh_store()
+        }
         Message::SearchInput(input) => {
             if input != app.search_input {
+                app.search_active = !input.is_empty();
+                app.results_limit = crate::constants::MAX_RESULTS;
                 app.search_input = input;
                 if !app.search_input.is_empty() {
                     app.search()
                 } else {
-                    Task::none()
+                    app.search_results = None;
+                    app.update_scroll()
                 }
             } else {
                 Task::none()
             }
         }
+        Message::SearchProgress(input) => {
+            if input == app.search_input {
+                app.search_pending = true;
+            }
+            Task::none()
+        }
         Message::SearchAugmented(input, mut results) => {
             if input == app.search_input {
+                app.search_pending = false;
+                let images = results
+                    .iter()
+                    .filter(|result| result.backend_name() == crate::catalog::STEAM)
+                    .map(|result| {
+                        (
+                            result.id.clone(),
+                            vec![crate::app_entry::AppEntry {
+                                backend_name: crate::catalog::STEAM,
+                                info: result.info.clone(),
+                                installed: false,
+                            }],
+                        )
+                    })
+                    .collect();
+                let images_task = super::data::catalog_images_task(images);
                 app.filter_store_results(&mut results);
                 app.load_icons_for_results(&mut results);
                 app.search_results = Some((input, results));
-                if app.details_page_opt.is_none() {
-                    return app.update_scroll();
-                }
+                return if app.details_page_opt.is_none() {
+                    Task::batch([app.update_scroll(), images_task])
+                } else {
+                    images_task
+                };
             }
             Task::none()
         }
         Message::SearchResults(input, mut results, auto_select) => {
             if input == app.search_input {
                 app.filter_store_results(&mut results);
+                app.search_pending = false;
+                log::info!("search {:?} ready: {} results", input, results.len());
                 app.load_icons_for_results(&mut results);
 
                 app.details_page_opt = None;
@@ -185,14 +246,17 @@ pub fn handle_search_message(app: &mut App, message: Message) -> Task<Message> {
             }
         }
         Message::SearchSortMode(sort_mode) => {
+            app.results_limit = crate::constants::MAX_RESULTS;
             app.search_sort_mode = sort_mode;
             app.refresh_store()
         }
         Message::StoreSource(source) => {
+            app.results_limit = crate::constants::MAX_RESULTS;
             app.store_source = source;
             app.refresh_store()
         }
         Message::NativeOnly(value) => {
+            app.results_limit = crate::constants::MAX_RESULTS;
             app.native_only = value;
             app.refresh_store()
         }
@@ -585,8 +649,12 @@ pub fn update(app: &mut App, message: Message) -> Task<Message> {
         | Message::SearchInput(_)
         | Message::SearchResults(..)
         | Message::SearchAugmented(..)
+        | Message::SearchProgress(_)
         | Message::StoreSource(_)
         | Message::NativeOnly(_)
+        | Message::ResetFilters
+        | Message::ShowMore
+        | Message::FindApp(_)
         | Message::SearchSortMode(_)
         | Message::SearchSubmit(_)
         | Message::WaylandFilter(_) => {
@@ -628,11 +696,16 @@ pub fn update(app: &mut App, message: Message) -> Task<Message> {
             app.explore_results.insert(explore_page, results);
         }
         Message::ExploreResultsReady(results_map) => {
+            app.explore_loading = false;
             // Batch results received - load icons and insert all at once
             for (explore_page, mut results) in results_map {
                 app.filter_store_results(&mut results);
                 app.load_icons_for_results(&mut results);
                 app.explore_results.insert(explore_page, results);
+            }
+            if app.backends.contains_key("packagekit") {
+                let visible: usize = app.explore_results.values().map(Vec::len).sum();
+                log::info!("local catalog ready: {} results", visible);
             }
         }
         Message::GStreamerExit(code) => match app.mode {

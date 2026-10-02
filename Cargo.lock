@@ -2956,7 +2956,6 @@ dependencies = [
 [[package]]
 name = "iced_wgpu"
 version = "0.14.0-dev"
-source = "git+https://github.com/pop-os/libcosmic.git#3b8ad45950f5d23c8550e18e628f6e70b7089d89"
 dependencies = [
  "as-raw-xcb-connection",
  "bitflags 2.10.0",

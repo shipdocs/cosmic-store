@@ -125,6 +125,7 @@ impl NavPage {
 /// Explore page categories
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub enum ExplorePage {
+    LinuxGames,
     EditorsChoice,
     PopularApps,
     MadeForCosmic,
@@ -144,6 +145,7 @@ pub enum ExplorePage {
 impl ExplorePage {
     pub fn all() -> &'static [Self] {
         &[
+            Self::LinuxGames,
             Self::NewApps,
             Self::Games,
             Self::PopularApps,
@@ -164,6 +166,7 @@ impl ExplorePage {
     pub fn title(&self) -> String {
         use crate::fl;
         match self {
+            Self::LinuxGames => fl!("linux-games"),
             Self::EditorsChoice => fl!("editors-choice"),
             Self::PopularApps => fl!("popular-apps"),
             Self::MadeForCosmic => fl!("made-for-cosmic"),
@@ -188,11 +191,19 @@ impl ExplorePage {
             Self::ProductivityApps => &[Category::Office],
             Self::GraphicsAndPhotographyTools => &[Category::Graphics],
             Self::SocialNetworkingApps => &[Category::Network],
-            Self::Games => &[Category::Game],
+            Self::Games | Self::LinuxGames => &[Category::Game],
             Self::MusicAndVideoApps => &[Category::AudioVideo],
             Self::AppsForLearning => &[Category::Education],
             Self::Utilities => &[Category::Settings, Category::System, Category::Utility],
             _ => &[],
         }
     }
+}
+
+/// Keep desktop-specific discovery out of other desktop environments.
+pub fn cosmic_desktop() -> bool {
+    std::env::var("XDG_CURRENT_DESKTOP")
+        .unwrap_or_default()
+        .split(':')
+        .any(|desktop| desktop.eq_ignore_ascii_case("cosmic"))
 }

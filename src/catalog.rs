@@ -256,7 +256,7 @@ fn item_info(item: &Value, new_release: bool) -> Option<(AppId, Arc<AppInfo>)> {
 
 fn parse_featured(value: &Value) -> Apps {
     let mut apps = Apps::new();
-    for section in ["top_sellers", "new_releases", "specials"] {
+    for section in ["linux_picks", "top_sellers", "new_releases", "specials"] {
         if let Some(items) = value
             .pointer(&format!("/{section}/items"))
             .and_then(Value::as_array)
@@ -278,6 +278,50 @@ fn parse_featured(value: &Value) -> Apps {
     apps
 }
 
+// Curated entry points, validated against current Steam product/platform facts.
+// Names, images and prices are never inferred from these IDs.
+fn linux_picks(client: &reqwest::blocking::Client) -> Vec<Value> {
+    let ids = [413150_u64, 427520, 105600, 892970, 570, 730, 281990, 975370];
+    let Ok(pool) = rayon::ThreadPoolBuilder::new().num_threads(4).build() else {
+        return Vec::new();
+    };
+    pool.install(|| {
+        ids.par_iter()
+            .filter_map(|id| {
+                let value = client
+                    .get("https://store.steampowered.com/api/appdetails/")
+                    .query(&[
+                        ("appids", id.to_string()),
+                        ("cc", "nl".into()),
+                        ("l", "english".into()),
+                    ])
+                    .send()
+                    .ok()?
+                    .error_for_status()
+                    .ok()?
+                    .json::<Value>()
+                    .ok()?;
+                native_pick(*id, value.get(id.to_string())?.get("data")?)
+            })
+            .collect()
+    })
+}
+
+fn native_pick(id: u64, data: &Value) -> Option<Value> {
+    if data.get("type")?.as_str()? != "game" || !data.pointer("/platforms/linux")?.as_bool()? {
+        return None;
+    }
+    let mut item = serde_json::json!({
+        "id": id, "type": 0, "catalog_type": "game", "name": data.get("name")?,
+        "platforms": data.get("platforms")?, "controller_support": data.get("controller_support"),
+        "header_image": data.get("header_image"), "price": data.get("price_overview"),
+    });
+    if data.get("is_free").and_then(Value::as_bool) == Some(true) {
+        item["final_price"] = Value::from(0);
+    }
+    Some(item)
+}
+
 pub fn featured() -> Apps {
     if std::env::consts::ARCH != "x86_64" {
         return Apps::new();
@@ -296,6 +340,22 @@ pub fn featured() -> Apps {
         .and_then(|r| r.error_for_status().ok())
         .and_then(|r| r.json::<Value>().ok())
         .map(validate_featured)
+        .map(|mut value| {
+            let picks = client()
+                .ok()
+                .map(|client| linux_picks(&client))
+                .unwrap_or_default();
+            value["linux_picks"] = if picks.is_empty() {
+                cached
+                    .as_ref()
+                    .and_then(|v| v.get("linux_picks"))
+                    .cloned()
+                    .unwrap_or(Value::Null)
+            } else {
+                serde_json::json!({"items": picks})
+            };
+            value
+        })
         .filter(|v| !parse_featured(v).is_empty());
     if let (Some(value), Some(path)) = (&value, cache_path()) {
         if let Some(parent) = path.parent() {
@@ -433,5 +493,49 @@ mod product_type_tests {
         }
         assert!(software_type("game"));
         assert!(software_type("software"));
+    }
+}
+
+/// Desktop launchers cover both system and Flatpak installations without running commands.
+pub fn steam_desktop_available() -> bool {
+    let mut data_dirs = vec![
+        PathBuf::from("/usr/share"),
+        PathBuf::from("/usr/local/share"),
+    ];
+    if let Some(home) = dirs::data_dir() {
+        data_dirs.push(home);
+    }
+    if let Some(home) = dirs::home_dir() {
+        data_dirs.push(home.join(".local/share/flatpak/exports/share"));
+    }
+    data_dirs.push(PathBuf::from("/var/lib/flatpak/exports/share"));
+    if let Some(paths) = std::env::var_os("XDG_DATA_DIRS") {
+        data_dirs.extend(std::env::split_paths(&paths));
+    }
+    data_dirs.iter().any(|dir| {
+        ["steam.desktop", "com.valvesoftware.Steam.desktop"]
+            .iter()
+            .any(|name| dir.join("applications").join(name).is_file())
+    })
+}
+
+#[cfg(test)]
+mod native_pick_tests {
+    use super::*;
+    #[test]
+    fn curated_games_require_current_linux_and_game_metadata() {
+        let mut data = serde_json::json!({"type":"game", "name":"A Linux game", "platforms":{"linux":true}, "is_free":true});
+        let pick = native_pick(42, &data).unwrap();
+        let (_, info) = item_info(&pick, false).unwrap();
+        assert!(crate::search::native_linux(STEAM, &info));
+        assert!(info.summary.contains(&crate::fl!("steam-free")));
+        data["platforms"]["linux"] = Value::Bool(false);
+        assert!(native_pick(42, &data).is_none());
+        data["platforms"]["linux"] = Value::Bool(true);
+        data["type"] = Value::String("hardware".into());
+        assert!(native_pick(42, &data).is_none());
+        data["type"] = Value::String("game".into());
+        data["platforms"] = Value::Null;
+        assert!(native_pick(42, &data).is_none());
     }
 }

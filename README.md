@@ -4,10 +4,32 @@ An independently maintained fork of [COSMIC Store](https://github.com/pop-os/cos
 
 The existing `cosmic-store` binary, package name, and application ID are retained for compatibility. This is a ShipDocs project, not an official Zorin store.
 
+## Install the Zorin test build
+
+Download **kompas-zorin-preview-amd64** from the latest successful
+[development build](https://github.com/shipdocs/cosmic-store/actions/workflows/lint.yml),
+extract the ZIP and install the `.deb` on Zorin 18 / Ubuntu 24.04 (64-bit Intel/AMD):
+
+```bash
+sudo apt install ./kompas_*.deb
+```
+
+Open **Kompas** from the application menu. This keeps the existing package identity
+`cosmic-store` so future builds upgrade the same installation. Preview packages
+use a stripped debug build; release optimization can follow user testing.
+The SHA256SUMS file accompanies each package. The installed package is exercised
+under X11 by CI before the workflow succeeds.
+
+For Flatpak results, ensure Flathub is configured (see below). Kompas uses your
+existing remotes and does not silently add software sources.
+
 ## Features
 
 - **Wayland Compatibility**: Shows badges and risk estimates derived from AppStream fields, Flatpak permissions, and framework heuristics. These estimates are not verified compatibility tests.
 - **Search Filters**: Sorting by download count, relevance, recent updates, and estimated Wayland compatibility, plus Wayland risk filters.
+- **Unified discovery**: System/Zorin packages, Flatpak and Steam with source selection, Linux-native filtering and consistent sorting.
+- **Complete browsing**: Progressive “Show more” browsing through the loaded catalog, result counts and recoverable empty states.
+- **Game launchers**: Discover Steam and Heroic (Epic/GOG); Steam game pages help install the client before handing over installation.
 - **Performance**: Async parsing of AppStream data and optimized icon loading.
 
 ## Branch Structure
@@ -70,8 +92,9 @@ and `just` (at least 1.13; a current release is recommended):
 dpkg-buildpackage -us -uc -b
 ```
 
-Use this only after the source build and checks succeed. A prebuilt Zorin package
-is not supplied yet.
+Use this after the source build and checks succeed. For a lighter preview package
+from an existing build, run `bash scripts/package-preview.sh target/release/cosmic-store`.
+CI publishes an installable preview package for testing.
 
 ## Development checks
 
@@ -97,7 +120,7 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## Unified discovery
 
-The start page shows new Steam releases and games before general application categories.
+The start page shows Steam games with current native Linux metadata, followed by new releases and general games. A small curated set provides discovery entry points; names, prices, artwork and Linux flags are fetched from Steam, and games without an explicit current Linux flag are excluded from the native section.
 Steam artwork, storefront pricing, controller metadata and Linux platform flags come
 from Steam's public store endpoints. These endpoints are not a guaranteed stable API.
 The Netherlands region is used for displayed prices. Cached featured metadata remains

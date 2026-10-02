@@ -9,25 +9,25 @@ use crate::app_id::AppId;
 use crate::app_info::WaylandCompatibility;
 use crate::backend::Package;
 use crate::category::Category;
-use crate::constants::MAX_RESULTS;
 use crate::fl;
 use crate::gstreamer::{GStreamerCodec, GStreamerExitCode, Mode};
 use crate::icon_cache::icon_cache_handle;
 use crate::message::Message;
 use crate::operation::{Operation, OperationKind};
 use crate::pages::{ContextPage, DialogPage, ExplorePage, NavPage};
-use crate::search::{SearchResult, WaylandFilter};
+use crate::search::SearchResult;
 use crate::source::{Source, SourceKind};
 use crate::ui::{GridMetrics, package_card_view};
 
 pub fn render_search_results<'a>(
     input: &str,
     results: &'a [SearchResult],
+    results_limit: usize,
     spacing: cosmic_theme::Spacing,
     grid_width: usize,
     app_stats: &'a HashMap<AppId, (u64, Option<WaylandCompatibility>)>,
 ) -> Element<'a, Message> {
-    let results_len = cmp::min(results.len(), MAX_RESULTS);
+    let results_len = cmp::min(results.len(), results_limit);
 
     let mut column = widget::column::with_capacity(2)
         .padding([0, spacing.space_s, spacing.space_m, spacing.space_s])
@@ -37,8 +37,13 @@ pub fn render_search_results<'a>(
     if !crate::catalog::alternatives(input).is_empty() {
         column = column.push(widget::text::body(fl!("alternative-results")));
     }
+    column = column.push(widget::text::title3(fl!("search-title", search = input)));
+    column = column.push(widget::text::caption(fl!(
+        "result-count",
+        count = (results.len() as i64)
+    )));
     if results.is_empty() {
-        column = column.push(widget::text::body(fl!("no-results", search = input)));
+        column = column.push(empty_catalog());
     }
 
     column = column.push(SearchResult::grid_view(
@@ -49,6 +54,7 @@ pub fn render_search_results<'a>(
         app_stats,
     ));
 
+    column = column.push(results_footer(results_len, results.len()));
     column.into()
 }
 
@@ -56,6 +62,7 @@ pub fn render_category_page<'a>(
     nav_page: NavPage,
     category_results: &'a Option<(&'static [Category], Vec<SearchResult>)>,
     sources: &[Source],
+    results_limit: usize,
     spacing: cosmic_theme::Spacing,
     grid_width: usize,
     app_stats: &'a HashMap<AppId, (u64, Option<WaylandCompatibility>)>,
@@ -96,10 +103,14 @@ pub fn render_category_page<'a>(
     match category_results {
         Some((_, results)) => {
             //TODO: paging or dynamic load
-            let results_len = cmp::min(results.len(), MAX_RESULTS);
+            let results_len = cmp::min(results.len(), results_limit);
 
+            column = column.push(widget::text::caption(fl!(
+                "result-count",
+                count = (results.len() as i64)
+            )));
             if results.is_empty() {
-                //TODO: no results message?
+                column = column.push(empty_catalog());
             }
 
             column = column.push(SearchResult::grid_view(
@@ -109,9 +120,10 @@ pub fn render_category_page<'a>(
                 Message::SelectCategoryResult,
                 app_stats,
             ));
+            column = column.push(results_footer(results_len, results.len()));
         }
         None => {
-            //TODO: loading message?
+            column = column.push(widget::text::body(fl!("catalog-loading")));
         }
     }
     column.into()
@@ -334,10 +346,13 @@ pub fn render_updates_page<'a>(
     column.into()
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn render_explore_page<'a>(
     explore_page_opt: &'a Option<ExplorePage>,
     explore_results: &'a HashMap<ExplorePage, Vec<SearchResult>>,
     loading_frame: usize,
+    explore_loading: bool,
+    results_limit: usize,
     spacing: cosmic_theme::Spacing,
     grid_width: usize,
     viewport_height: f32,
@@ -366,10 +381,10 @@ pub fn render_explore_page<'a>(
             match explore_results.get(explore_page) {
                 Some(results) => {
                     //TODO: paging or dynamic load
-                    let results_len = cmp::min(results.len(), MAX_RESULTS);
+                    let results_len = cmp::min(results.len(), results_limit);
 
                     if results.is_empty() {
-                        //TODO: no results message?
+                        column = column.push(empty_catalog());
                     }
                     column = column.push(SearchResult::grid_view(
                         &results[..results_len],
@@ -378,14 +393,18 @@ pub fn render_explore_page<'a>(
                         move |result_i| Message::SelectExploreResult(*explore_page, result_i),
                         app_stats,
                     ));
+                    column = column.push(results_footer(results_len, results.len()));
                 }
                 None => {
                     column = column.push(
                         widget::container(
                             widget::column::with_children(vec![
-                                widget::icon::from_name("com.system76.CosmicStore")
-                                    .size(128)
-                                    .into(),
+                                widget::icon::icon(icon_cache_handle(
+                                    "com.system76.CosmicStore",
+                                    128,
+                                ))
+                                .size(64)
+                                .into(),
                                 widget::Space::with_height(spacing.space_l).into(),
                                 widget::text::title3(fl!("loading")).into(),
                                 widget::Space::with_height(spacing.space_xs).into(),
@@ -399,7 +418,7 @@ pub fn render_explore_page<'a>(
                             .align_x(Alignment::Center),
                         )
                         .width(Length::Fill)
-                        .height(Length::Fixed(viewport_height))
+                        .height(Length::Fixed(viewport_height.min(320.0)))
                         .align_x(Alignment::Center)
                         .align_y(Alignment::Center),
                     );
@@ -414,10 +433,32 @@ pub fn render_explore_page<'a>(
                 .spacing(space_xxs)
                 .width(Length::Fill);
             column = column
-                .push(widget::text::title1(fl!("store-welcome")))
-                .push(widget::text::body(fl!("store-intro")))
+                .push(
+                    widget::container(
+                        widget::column::with_children(vec![
+                            widget::text::caption("KOMPAS").into(),
+                            widget::text::title1(fl!("store-welcome")).into(),
+                            widget::text::body(fl!("store-intro")).into(),
+                            widget::row::with_children(vec![
+                                widget::button::suggested(fl!("discover-steam"))
+                                    .on_press(Message::FindApp("Steam".into()))
+                                    .into(),
+                                widget::button::standard(fl!("discover-heroic"))
+                                    .on_press(Message::FindApp("Heroic".into()))
+                                    .into(),
+                            ])
+                            .spacing(12)
+                            .into(),
+                            widget::text::caption(fl!("game-launcher-help")).into(),
+                        ])
+                        .spacing(12),
+                    )
+                    .padding(24)
+                    .width(Length::Fill)
+                    .class(theme::Container::Card),
+                )
                 .push(widget::Space::with_height(space_m));
-            if explore_results.is_empty() {
+            if explore_loading {
                 column = column.push(
                     widget::container(
                         widget::column::with_children(vec![
@@ -437,24 +478,26 @@ pub fn render_explore_page<'a>(
                         .align_x(Alignment::Center),
                     )
                     .width(Length::Fill)
-                    .height(Length::Fixed(viewport_height))
+                    .height(Length::Fixed(viewport_height.min(320.0)))
                     .align_x(Alignment::Center)
                     .align_y(Alignment::Center),
                 );
+            } else if explore_results.values().all(Vec::is_empty) {
+                column = column.push(empty_catalog());
             } else {
                 for explore_page in explore_pages.iter() {
+                    if *explore_page == ExplorePage::MadeForCosmic
+                        && !crate::pages::cosmic_desktop()
+                    {
+                        continue;
+                    }
                     //TODO: ensure explore_page matches
                     match explore_results.get(explore_page) {
                         Some(results) if !results.is_empty() => {
                             let GridMetrics { cols, .. } =
                                 SearchResult::grid_metrics(&spacing, grid_width);
 
-                            let max_results = match cols {
-                                1 => 4,
-                                2 => 8,
-                                3 => 9,
-                                _ => cols * 2,
-                            };
+                            let max_results = cols * 2;
 
                             //TODO: adjust results length based on app size?
                             let results_len = cmp::min(results.len(), max_results);
@@ -692,56 +735,19 @@ pub fn render_footer<'a>(
 #[allow(clippy::too_many_arguments)]
 pub fn render_header_start<'a>(
     mode: &Mode,
-    search_active: bool,
     search_input: &'a str,
     search_id: widget::Id,
-    _search_sort_options: &'a [String],
-    _search_sort_mode: crate::search::SearchSortMode,
-    wayland_filter_options: &'a [String],
-    wayland_filter: WaylandFilter,
 ) -> Vec<Element<'a, Message>> {
     match mode {
-        Mode::Normal => {
-            if search_active {
-                vec![
-                    widget::text_input::search_input("", search_input)
-                        .width(Length::Fixed(240.0))
-                        .id(search_id)
-                        .on_clear(Message::SearchClear)
-                        .on_input(Message::SearchInput)
-                        .on_submit(Message::SearchSubmit)
-                        .into(),
-                    widget::dropdown(
-                        wayland_filter_options,
-                        Some(match wayland_filter {
-                            WaylandFilter::All => 0,
-                            WaylandFilter::Excellent => 1,
-                            WaylandFilter::Good => 2,
-                            WaylandFilter::Caution => 3,
-                            WaylandFilter::Limited => 4,
-                            WaylandFilter::Unknown => 5,
-                        }),
-                        |index| match index {
-                            0 => Message::WaylandFilter(WaylandFilter::All),
-                            1 => Message::WaylandFilter(WaylandFilter::Excellent),
-                            2 => Message::WaylandFilter(WaylandFilter::Good),
-                            3 => Message::WaylandFilter(WaylandFilter::Caution),
-                            4 => Message::WaylandFilter(WaylandFilter::Limited),
-                            _ => Message::WaylandFilter(WaylandFilter::Unknown),
-                        },
-                    )
-                    .width(Length::Fixed(200.0))
-                    .into(),
-                ]
-            } else {
-                vec![
-                    widget::button::icon(widget::icon::from_name("system-search-symbolic"))
-                        .on_press(Message::SearchActivate)
-                        .padding(8)
-                        .into(),
-                ]
-            }
-        }
+        Mode::Normal => vec![
+            widget::text_input::search_input(fl!("search-store"), search_input)
+                .width(Length::Fixed(260.0))
+                .id(search_id)
+                .on_clear(Message::SearchClear)
+                .on_input(Message::SearchInput)
+                .on_submit(Message::SearchSubmit)
+                .into(),
+        ],
         Mode::GStreamer { .. } => Vec::new(),
     }
 }
@@ -751,9 +757,16 @@ pub fn render_header_end<'a>(mode: &Mode) -> Vec<Element<'a, Message>> {
         Mode::Normal => {
             vec![
                 widget::tooltip(
-                    widget::button::icon(widget::icon::from_name("application-menu-symbolic"))
+                    widget::button::icon(icon_cache_handle("store-sources-symbolic", 16))
                         .on_press(Message::ToggleContextPage(ContextPage::Repositories)),
                     widget::text(fl!("manage-repositories")),
+                    widget::tooltip::Position::Bottom,
+                )
+                .into(),
+                widget::tooltip(
+                    widget::button::icon(icon_cache_handle("store-settings-symbolic", 16))
+                        .on_press(Message::ToggleContextPage(ContextPage::Settings)),
+                    widget::text(fl!("settings")),
                     widget::tooltip::Position::Bottom,
                 )
                 .into(),
@@ -885,4 +898,43 @@ pub fn render_gstreamer_view<'a>(
         .width(Length::Fill)
         .height(Length::Fill)
         .into()
+}
+
+fn empty_catalog<'a>() -> Element<'a, Message> {
+    widget::container(
+        widget::column::with_children(vec![
+            widget::text::title3(fl!("catalog-empty")).into(),
+            widget::text::body(fl!("catalog-empty-help")).into(),
+            widget::button::suggested(fl!("reset-filters"))
+                .on_press(Message::ResetFilters)
+                .into(),
+            widget::button::standard(fl!("include-proton-games"))
+                .on_press(Message::NativeOnly(false))
+                .into(),
+            widget::button::text(fl!("manage-repositories"))
+                .on_press(Message::ToggleContextPage(ContextPage::Repositories))
+                .into(),
+        ])
+        .spacing(12),
+    )
+    .padding(24)
+    .width(Length::Fill)
+    .class(theme::Container::Card)
+    .into()
+}
+
+fn results_footer<'a>(shown: usize, total: usize) -> Element<'a, Message> {
+    let mut column = widget::column::with_capacity(2)
+        .spacing(12)
+        .padding([16, 0]);
+    if total > shown {
+        column = column
+            .push(widget::text::caption(fl!(
+                "results-shown",
+                shown = (shown as i64),
+                total = (total as i64)
+            )))
+            .push(widget::button::standard(fl!("show-more")).on_press(Message::ShowMore));
+    }
+    column.into()
 }

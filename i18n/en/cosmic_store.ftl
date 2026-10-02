@@ -189,5 +189,34 @@ alternative-results = Available alternatives from your configured software sourc
 
 all-apps = All apps
 source-all = All sources
-native-linux-only = Native Linux only (hide games requiring Proton)
 sort-name = Name (A–Z)
+filter-source = Show apps from
+filter-sort = Sort by
+reset-filters = Reset filters
+native-linux-only = Native Linux only
+native-linux-help = Hide Windows games requiring Proton. Native support does not guarantee that your hardware meets the requirements.
+catalog-loading = Gathering apps available on this computer…
+catalog-empty = Nothing here with these filters
+catalog-empty-help = Try another source or allow games requiring Proton. Check your software sources if you are missing apps.
+result-count = { $count } results
+results-shown = Showing { $shown } of { $total }
+show-more = Show more
+search-title = Results for “{ $search }”
+discover-steam = Find Steam
+discover-heroic = Epic & GOG with Heroic
+game-launcher-help = Install your launcher here, then browse and play through its own store.
+steam-required = Install Steam first, then return to this game.
+steam-get-client = Find and install Steam
+steam-ready = Steam is available. It handles ownership and installation.
+
+search-store = Search apps and games
+
+search-steam-loading = Searching Steam… Your local apps are already shown.
+
+compatibility-estimates = Compatibility estimates
+compatibility-estimates-help = Optional Wayland estimates apply to search results. They are not game or hardware tests. Choose All to include Steam searches.
+wayland-filter = Wayland estimate in search
+
+include-proton-games = Include games requiring Proton
+
+linux-games = Games with native Linux support

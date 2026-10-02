@@ -13,3 +13,5 @@ plans/
 .augment/
 
 /smoke-artifacts/
+
+/dist/

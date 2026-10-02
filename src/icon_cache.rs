@@ -34,6 +34,8 @@ impl IconCache {
         }
 
         bundle!("store-applets-symbolic", 16);
+        bundle!("store-sources-symbolic", 16);
+        bundle!("store-settings-symbolic", 16);
         bundle!("store-create-symbolic", 16);
         bundle!("store-develop-symbolic", 16);
         bundle!("store-game-symbolic", 16);
@@ -46,6 +48,13 @@ impl IconCache {
         bundle!("store-utilities-symbolic", 16);
         bundle!("store-work-symbolic", 16);
 
+        cache.insert(
+            IconCacheKey {
+                name: "com.system76.CosmicStore",
+                size: 128,
+            },
+            icon::from_svg_bytes(include_bytes!("../res/icons/kompas.svg")),
+        );
         Self { cache }
     }
 

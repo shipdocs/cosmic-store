@@ -1,7 +1,7 @@
 Source: cosmic-store
 Section: admin
 Priority: optional
-Maintainer: Jeremy Soller <jeremy@system76.com>
+Maintainer: ShipDocs <info@shipdocs.app>
 Build-Depends:
     debhelper-compat (=13),
     git,
@@ -9,20 +9,25 @@ Build-Depends:
     libflatpak-dev,
     libssl-dev,
     libxkbcommon-dev,
+    libwayland-dev,
+    libfontconfig1-dev,
+    libegl1-mesa-dev,
     pkg-config,
     rust-all,
 Standards-Version: 4.6.2
-Homepage: https://github.com/pop-os/cosmic-store
+Homepage: https://github.com/shipdocs/cosmic-store
 
 Package: cosmic-store
 Architecture: amd64 arm64
 Depends:
-    appstream-data-pop,
     apt-config-icons,
     apt-config-icons-hidpi,
     apt-config-icons-large,
     apt-config-icons-large-hidpi,
-    cosmic-icons,
     ${misc:Depends},
     ${shlibs:Depends}
-Description: COSMIC Store
+Recommends: flatpak, packagekit, adwaita-icon-theme
+Description: ShipDocs software store for Zorin and Ubuntu
+ A fork of COSMIC Store with Flatpak and PackageKit integration,
+ download-based discovery and estimated Wayland compatibility badges.
+ Targets Zorin and Ubuntu desktops without Pop!_OS-specific data packages.

@@ -1,25 +1,93 @@
-# COSMIC Store (Wayland Enhanced)
+# ShipDocs Store (COSMIC-based)
 
-A fork of [COSMIC Store](https://github.com/pop-os/cosmic-store) focusing on Wayland compatibility metadata and search optimizations.
+An independently maintained fork of [COSMIC Store](https://github.com/pop-os/cosmic-store), targeting Zorin and Ubuntu desktops. It combines Flatpak and PackageKit with software discovery and estimated Wayland compatibility.
+
+The existing `cosmic-store` binary, package name, and application ID are retained for compatibility. This is a ShipDocs project, not an official Zorin store.
 
 ## Features
 
-- **Wayland Compatibility**: Adds parsing and display of Wayland support status (badges, risk levels) from AppStream data.
-- **Search Filters**: Additional filtering by download count and Wayland compatibility.
+- **Wayland Compatibility**: Shows badges and risk estimates derived from AppStream fields, Flatpak permissions, and framework heuristics. These estimates are not verified compatibility tests.
+- **Search Filters**: Sorting by download count, relevance, recent updates, and estimated Wayland compatibility, plus Wayland risk filters.
 - **Performance**: Async parsing of AppStream data and optimized icon loading.
 
 ## Branch Structure
 
-- `master`: Mirrored from upstream (pop-os/cosmic-store).
+- `master`: Historical upstream baseline (pop-os/cosmic-store).
 - `develop`: Active development branch containing all enhancements.
 
-## Build and Run
+## Build and Run on Zorin / Ubuntu
+
+Use a current stable Rust toolchain installed through [rustup](https://rustup.rs/).
+The manifest requires Rust 1.85 or newer; locked dependencies and workspace tools
+may require a newer compiler. The distribution's Rust package may be too old.
+
+Install the native build dependencies:
 
 ```bash
-git checkout develop
-cargo build --release
-cargo run --release
+sudo apt update
+sudo apt install build-essential git pkg-config libflatpak-dev libssl-dev \
+    libxkbcommon-dev libwayland-dev libfontconfig1-dev libegl1-mesa-dev
 ```
+
+Clone and build the development branch without changing the lockfile:
+
+```bash
+git clone --branch develop https://github.com/shipdocs/cosmic-store.git
+cd cosmic-store
+rustup update stable
+cargo +stable build --release --locked
+cargo +stable run --release --locked
+```
+
+Run the store as your normal desktop user, without `sudo`. It uses the system's
+configured Flatpak remotes and PackageKit service. For Flatpak apps, ensure
+Flatpak and Flathub are available:
+
+```bash
+sudo apt install flatpak packagekit
+flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+```
+
+The default build includes both Flatpak and PackageKit. It uses libcosmic's winit
+backend; a COSMIC desktop session is not required by the build instructions.
+Actual startup and rendering must still be tested on your Zorin X11/Wayland session.
+
+For startup diagnostics:
+
+```bash
+RUST_LOG=cosmic_store=info RUST_BACKTRACE=1 cargo +stable run --release --locked
+```
+
+The Debian packaging no longer requires Pop!_OS-specific `appstream-data-pop` or
+`cosmic-icons` packages. Packaging and icon rendering still need validation on a
+real Zorin installation. The instructions above run directly from the build
+directory and do not replace Zorin Software or Bazaar.
+
+A local Debian build uses the existing vendoring recipe and requires `debhelper`
+and `just` (at least 1.13; a current release is recommended):
+
+```bash
+dpkg-buildpackage -us -uc -b
+```
+
+Use this only after the source build and checks succeed. A prebuilt Zorin package
+is not supplied yet.
+
+## Development checks
+
+```bash
+cargo +stable fmt -- --check
+cargo +stable clippy --locked -- -D warnings
+cargo +stable test --locked --workspace
+```
+
+Pull requests into `develop` and pushes to `develop` run these checks on Ubuntu 24.04.
+
+## Current limitations
+
+- The new-apps discovery page is not implemented.
+- Steam, Epic, GOG, and Proton catalogs are not integrated.
+- Wayland badges are estimates; they do not certify GPU, controller, or runtime compatibility.
 
 ## Contributing
 

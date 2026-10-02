@@ -61,7 +61,11 @@ pub fn wayland_compat_badge<'a>(
                     Color::from_rgb(0.15, 0.75, 0.3),
                     Color::from_rgba(0.15, 0.75, 0.3, 0.2),
                 ),
-                widget::text::caption(fl!("wayland-native-tooltip")),
+                widget::text::caption(format!(
+                    "{}\n{}",
+                    fl!("wayland-native-tooltip"),
+                    fl!("wayland-estimate-tooltip")
+                )),
                 widget::tooltip::Position::Bottom,
             )),
             RiskLevel::Medium => Some(widget::tooltip(
@@ -71,7 +75,12 @@ pub fn wayland_compat_badge<'a>(
                     Color::from_rgb(0.2, 0.6, 0.85),
                     Color::from_rgba(0.2, 0.6, 0.85, 0.2),
                 ),
-                widget::text::caption(format!("{:?} - Good Wayland support", compat.framework)),
+                widget::text::caption(format!(
+                    "{:?} - {}\n{}",
+                    compat.framework,
+                    fl!("wayland-moderate-tooltip"),
+                    fl!("wayland-estimate-tooltip")
+                )),
                 widget::tooltip::Position::Bottom,
             )),
             RiskLevel::High => {
@@ -88,7 +97,11 @@ pub fn wayland_compat_badge<'a>(
                         Color::from_rgb(1.0, 0.55, 0.0),
                         Color::from_rgba(1.0, 0.55, 0.0, 0.2),
                     ),
-                    widget::text::caption(tooltip_text),
+                    widget::text::caption(format!(
+                        "{}\n{}",
+                        tooltip_text,
+                        fl!("wayland-estimate-tooltip")
+                    )),
                     widget::tooltip::Position::Bottom,
                 ))
             }
@@ -101,7 +114,11 @@ pub fn wayland_compat_badge<'a>(
                         Color::from_rgb(1.0, 0.3, 0.3),
                         Color::from_rgba(1.0, 0.3, 0.3, 0.2),
                     ),
-                    widget::text::caption(tooltip_text),
+                    widget::text::caption(format!(
+                        "{}\n{}",
+                        tooltip_text,
+                        fl!("wayland-estimate-tooltip")
+                    )),
                     widget::tooltip::Position::Bottom,
                 ))
             }

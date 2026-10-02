@@ -5,7 +5,7 @@ use crate::app_info::WaylandCompatibility;
 use rust_embed::RustEmbed;
 
 const STATS_URL_V8: &str =
-    "https://github.com/shipdocs/cosmic-store/releases/latest/download/flathub-stats.bitcode";
+    "https://github.com/shipdocs/cosmic-store/releases/latest/download/flathub-stats.bitcode-v0-8";
 const STATS_URL: &str =
     "https://github.com/shipdocs/cosmic-store/releases/latest/download/flathub-stats.bitcode-v0-7";
 const METADATA_URL: &str =

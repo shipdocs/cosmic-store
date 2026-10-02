@@ -1,3 +1,11 @@
+cosmic-store (0.1.0+shipdocs1) noble; urgency=medium
+
+  * Target Zorin/Ubuntu without mandatory Pop!_OS data or icon packages.
+  * Fix the v0-8 statistics release asset URL.
+  * Add development branch checks and Zorin build instructions.
+
+ -- ShipDocs <info@shipdocs.app>  Fri, 02 Oct 2026 21:37:00 +0000
+
 cosmic-store (0.1.0) jammy; urgency=medium
 
   * Initial release.

@@ -110,3 +110,6 @@ place-and-refine = Plaats en verfijn
 codec-title = Extra softwarepakketten installeren?
 codec-header = "{ $application }" vereist extra softwarepakketten voor deze functies: "{ $description }".
 codec-error = Er zijn fouten opgetreden gedurende de softwarepakket installatie.
+wayland-native-tooltip = Metadata wijst op native Wayland-ondersteuning
+wayland-estimate-tooltip = Geschat op basis van metadata; niet getest op jouw systeem.
+wayland-moderate-tooltip = Geschat gemiddeld Wayland-risico

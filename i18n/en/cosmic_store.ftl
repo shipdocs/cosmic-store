@@ -170,4 +170,6 @@ wayland-issues-description = This application uses {$framework} which may have c
 framework-qtwebengine = Qt WebEngine
 framework-electron = Electron
 wayland-native = Wayland Native
-wayland-native-tooltip = This app has native Wayland support and will work perfectly on Wayland sessions
+wayland-native-tooltip = Metadata indicates native Wayland support
+wayland-estimate-tooltip = Estimated from metadata; not verified on your system.
+wayland-moderate-tooltip = Moderate estimated Wayland risk

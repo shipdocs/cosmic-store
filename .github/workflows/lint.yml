@@ -2,35 +2,41 @@ name: Lint and Format Check
 
 on:
   push:
-    branches: [ master, feature/*, perf/* ]
+    branches: [ master, develop, feature/*, perf/* ]
   pull_request:
-    branches: [ master, feature/*, perf/* ]
+    branches: [ master, develop, feature/*, perf/* ]
 
 jobs:
   lint:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       
+      - name: Install native build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config libflatpak-dev libssl-dev libxkbcommon-dev libwayland-dev libfontconfig1-dev libegl1-mesa-dev
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
       
       - name: Cache cargo registry
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ~/.cargo/registry
           key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
       
       - name: Cache cargo index
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ~/.cargo/git
           key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
       
       - name: Cache cargo build
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: target
           key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
@@ -39,5 +45,8 @@ jobs:
         run: cargo fmt -- --check
       
       - name: Run clippy
-        run: cargo clippy -- -D warnings
+        run: cargo clippy --locked -- -D warnings
+
+      - name: Run tests
+        run: cargo test --locked --workspace
 

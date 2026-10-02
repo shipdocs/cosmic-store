@@ -243,9 +243,9 @@ impl AppstreamCache {
         dirs::cache_dir().map(|x| x.join("cosmic-store").join(cache_name))
     }
 
-    /// Filename of cache (unversioned, follows new naming convention)
+    /// Cache version includes the tolerant per-component YAML parser.
     fn cache_filename() -> &'static str {
-        "appstream_cache.bitcode"
+        "appstream_cache_v2.bitcode"
     }
 
     /// Remove all files from cache not matching filename
@@ -808,9 +808,20 @@ impl AppstreamCache {
         };
 
         // Parse all documents sequentially first - this is fast for structure
-        let documents: Vec<serde_yaml::Value> = serde_yaml::Deserializer::from_str(yaml_str)
-            .map(serde_yaml::Value::deserialize)
-            .collect::<Result<Vec<_>, _>>()?;
+        let mut documents = Vec::new();
+        for (index, document) in serde_yaml::Deserializer::from_str(yaml_str).enumerate() {
+            match serde_yaml::Value::deserialize(document) {
+                Ok(value) => documents.push(value),
+                // The header defines repository identity and must remain valid.
+                Err(error) if index == 0 => return Err(Box::new(error)),
+                Err(error) => log::warn!(
+                    "skipping malformed AppStream document {} in {:?}: {}",
+                    index,
+                    path,
+                    error
+                ),
+            }
+        }
 
         if documents.is_empty() {
             return Ok((None, Vec::new(), Vec::new()));

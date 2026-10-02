@@ -73,3 +73,44 @@ fn bench_xml_parsing() {
 
     println!("Parsed 2 XML components in {:?}", duration);
 }
+
+#[test]
+fn malformed_translation_does_not_discard_the_repository() {
+    let data = r#"---
+Origin: zorin
+---
+Type: desktop-application
+ID: org.example.First
+Name: {C: First}
+Summary: {C: First app}
+---
+Type: desktop-application
+ID: org.example.Invalid
+Name: {C: Invalid}
+Keywords:
+  ca_ES: [one]
+  ca_ES: [two]
+---
+Type: desktop-application
+ID: org.example.Last
+Name: {C: Last}
+Summary: {C: Last app}
+"#;
+    let (origin, infos, _) = AppstreamCache::default()
+        .parse_yaml("zorin.yml", data.as_bytes())
+        .unwrap();
+    assert_eq!(origin.as_deref(), Some("zorin"));
+    let ids: std::collections::HashSet<_> = infos.into_iter().map(|(id, _)| id).collect();
+    assert_eq!(ids.len(), 2);
+    assert!(ids.contains(&AppId::new("org.example.First")));
+    assert!(ids.contains(&AppId::new("org.example.Last")));
+}
+
+#[test]
+fn invalid_repository_header_is_rejected() {
+    assert!(
+        AppstreamCache::default()
+            .parse_yaml("invalid.yml", b"Origin: first\nOrigin: second\n")
+            .is_err()
+    );
+}

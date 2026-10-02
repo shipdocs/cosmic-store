@@ -884,3 +884,46 @@ fn entry_available(
         .get("packagekit")
         .is_none_or(|backend| backend.is_package_available(&info.pkgnames))
 }
+
+#[cfg(test)]
+mod unified_sort_tests {
+    use super::*;
+    #[test]
+    fn mixed_sources_share_name_and_popularity_sorting() {
+        let make = |backend, name: &str, downloads| {
+            SearchResult::new(
+                backend,
+                crate::AppId::new(name),
+                None,
+                std::sync::Arc::new(crate::AppInfo {
+                    name: name.to_string(),
+                    monthly_downloads: downloads,
+                    ..crate::AppInfo::default()
+                }),
+                0,
+            )
+        };
+        let mut results = vec![
+            make("packagekit", "Zulu", 9),
+            make("steam", "Alpha", 0),
+            make("flatpak-user", "Bravo", 10),
+        ];
+        let stats = std::collections::HashMap::new();
+        sort_results(&mut results, SearchSortMode::Name, &stats);
+        assert_eq!(
+            results
+                .iter()
+                .map(|r| r.info.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["Alpha", "Bravo", "Zulu"]
+        );
+        sort_results(&mut results, SearchSortMode::MostDownloads, &stats);
+        assert_eq!(
+            results
+                .iter()
+                .map(|r| r.info.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["Bravo", "Zulu", "Alpha"]
+        );
+    }
+}

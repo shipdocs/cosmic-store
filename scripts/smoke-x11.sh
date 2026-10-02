@@ -23,7 +23,14 @@ if [ -z "$window_id" ]; then
     exit 1
 fi
 # Give background storefront discovery time to populate the first rows.
-sleep 12
+sleep 20
 kill -0 "$app_pid"
 import -window "$window_id" "$output/store-x11.png"
 test -s "$output/store-x11.png"
+
+# Browse the unified catalog, using the stable second navigation entry.
+xdotool mousemove --window "$window_id" 90 112 click 1
+sleep 5
+kill -0 "$app_pid"
+import -window "$window_id" "$output/all-apps-native.png"
+test -s "$output/all-apps-native.png"

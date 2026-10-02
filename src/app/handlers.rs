@@ -66,6 +66,14 @@ pub fn handle_config_message(app: &mut App, message: Message) -> Task<Message> {
 pub fn handle_search_message(app: &mut App, message: Message) -> Task<Message> {
     match message {
         Message::CategoryResults(categories, mut results) => {
+            if app
+                .nav_model
+                .active_data::<NavPage>()
+                .and_then(NavPage::categories)
+                != Some(categories)
+            {
+                return Task::none();
+            }
             app.filter_store_results(&mut results);
             app.load_icons_for_results(&mut results);
             app.category_results = Some((categories, results));

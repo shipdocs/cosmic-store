@@ -33,3 +33,17 @@ Kompas is an initial unified discovery layer. Epic/GOG, automatically establishe
 5. Demonstrate that supported architecture/availability rules hide unusable options without hiding valid installed apps.
 
 CI validates parsing, source filtering, availability rules, sorting and X11 startup. The end-to-end installation/launch criteria need a real desktop session. Sustained value should be judged by whether these tasks require fewer source choices and failed installs than Bazaar/Discover, rather than by screenshots alone.
+
+
+## Testing-ready preview
+
+Kompas now includes progressive catalog browsing, responsive labelled filters,
+source recovery, launcher prerequisites, its own visual identity and an installable
+Ubuntu 24.04 package. CI installs the package before exercising the actual X11
+application. Heroic discovery makes Epic/GOG accessible through their launcher;
+it does not yet merge their individual games into Kompas search. Native Linux
+filtering uses explicit platform metadata, not guessed Proton compatibility.
+
+The practical value remains reducing the user's need to understand packaging and
+launcher sources. Real Zorin install/launch feedback is the next validation of
+that value; CI does not establish compatibility with every game or GPU.

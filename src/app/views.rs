@@ -40,7 +40,7 @@ pub fn render_search_results<'a>(
     column = column.push(widget::text::title3(fl!("search-title", search = input)));
     column = column.push(widget::text::caption(fl!(
         "result-count",
-        count = results.len() as i64
+        count = (results.len() as i64)
     )));
     if results.is_empty() {
         column = column.push(empty_catalog());
@@ -107,7 +107,7 @@ pub fn render_category_page<'a>(
 
             column = column.push(widget::text::caption(fl!(
                 "result-count",
-                count = results.len() as i64
+                count = (results.len() as i64)
             )));
             if results.is_empty() {
                 column = column.push(empty_catalog());
@@ -346,6 +346,7 @@ pub fn render_updates_page<'a>(
     column.into()
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn render_explore_page<'a>(
     explore_page_opt: &'a Option<ExplorePage>,
     explore_results: &'a HashMap<ExplorePage, Vec<SearchResult>>,
@@ -954,8 +955,8 @@ fn results_footer<'a>(shown: usize, total: usize) -> Element<'a, Message> {
         column = column
             .push(widget::text::caption(fl!(
                 "results-shown",
-                shown = shown as i64,
-                total = total as i64
+                shown = (shown as i64),
+                total = (total as i64)
             )))
             .push(widget::button::standard(fl!("show-more")).on_press(Message::ShowMore));
     }

@@ -356,6 +356,10 @@ impl App {
             self.search_input.clone(),
             self.search_sort_mode,
             self.wayland_filter,
+            matches!(
+                self.store_source,
+                crate::search::StoreSource::All | crate::search::StoreSource::Steam
+            ),
         )
     }
 

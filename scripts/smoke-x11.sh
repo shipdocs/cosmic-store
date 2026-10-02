@@ -42,3 +42,25 @@ sleep 2
 kill -0 "$app_pid"
 import -window "$window_id" "$output/all-apps-native.png"
 test -s "$output/all-apps-native.png"
+
+# Exercise actual keyboard search and its recoverable empty state.
+xdotool windowfocus "$window_id"
+xdotool key --window "$window_id" ctrl+f
+xdotool type --window "$window_id" --delay 100 'gimp'
+for attempt in $(seq 1 20); do
+    if grep -Eq 'searched for "gimp".*found [1-9][0-9]* results' "$output/startup.log"; then break; fi
+    kill -0 "$app_pid"
+    sleep 1
+done
+grep -Eq 'searched for "gimp".*found [1-9][0-9]* results' "$output/startup.log"
+sleep 2
+import -window "$window_id" "$output/search-gimp.png"
+xdotool key --window "$window_id" ctrl+a
+xdotool type --window "$window_id" --delay 40 'kompas-no-such-app-987654321'
+sleep 3
+kill -0 "$app_pid"
+import -window "$window_id" "$output/search-empty.png"
+# Narrow window exercises the stacked filter layout.
+xdotool windowsize "$window_id" 620 768
+sleep 2
+import -window "$window_id" "$output/narrow.png"

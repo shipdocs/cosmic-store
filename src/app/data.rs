@@ -156,6 +156,7 @@ pub fn installed_results_task(
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn search_task(
     apps: Arc<Apps>,
     backends: Backends,
@@ -164,6 +165,7 @@ pub fn search_task(
     input: String,
     sort_mode: SearchSortMode,
     wayland_filter: WaylandFilter,
+    include_steam: bool,
 ) -> Task<Message> {
     // Handle supported URI schemes before trying plain text search
     if let Ok(url) = reqwest::Url::parse(&input) {
@@ -239,7 +241,10 @@ pub fn search_task(
                     false,
                 ))
                 .await;
-            if wayland_filter != WaylandFilter::All || input.trim().chars().count() < 2 {
+            if !include_steam
+                || wayland_filter != WaylandFilter::All
+                || input.trim().chars().count() < 2
+            {
                 return;
             }
             // Let typing settle before making a remote request. Old queries cannot overwrite new ones.

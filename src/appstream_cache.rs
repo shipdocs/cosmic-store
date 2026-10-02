@@ -580,9 +580,10 @@ impl AppstreamCache {
 
         icon_opt.unwrap_or_else(|| {
             log::debug!("failed to get icon from {:?}", info.icons);
-            widget::icon::from_name("package-x-generic")
-                .size(128)
-                .handle()
+            // Always provide a valid bundled SVG when the host icon theme or
+            // repository artwork is missing. Empty image handles can retain stale
+            // GPU image layers in the pinned renderer when changing pages.
+            crate::icon_cache::icon_cache_handle("store-installed-symbolic", 16)
         })
     }
     pub fn load_original(&mut self) {

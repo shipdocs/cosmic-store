@@ -105,7 +105,7 @@ impl NavPage {
     pub fn icon(&self) -> cosmic::widget::icon::Icon {
         use crate::icon_cache::icon_cache_icon;
         match self {
-            Self::AllApps => icon_cache_icon("view-grid-symbolic", 16),
+            Self::AllApps => icon_cache_icon("store-installed-symbolic", 16),
             Self::Explore => icon_cache_icon("store-home-symbolic", 16),
             Self::Create => icon_cache_icon("store-create-symbolic", 16),
             Self::Work => icon_cache_icon("store-work-symbolic", 16),

@@ -186,7 +186,7 @@ impl SearchResult {
             } else {
                 card = card.push(
                     widget::container(
-                        widget::icon::from_name("applications-games-symbolic").size(48),
+                        widget::icon::icon(icon_cache_handle("store-game-symbolic", 16)).size(48),
                     )
                     .height(Length::Fixed(112.0))
                     .width(Length::Fill)

@@ -218,3 +218,5 @@ compatibility-estimates-help = Optional Wayland estimates apply to search result
 wayland-filter = Wayland estimate in search
 
 include-proton-games = Include games requiring Proton
+
+linux-games = Games with native Linux support

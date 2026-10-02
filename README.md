@@ -120,7 +120,7 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## Unified discovery
 
-The start page shows new Steam releases and games before general application categories.
+The start page shows Steam games with current native Linux metadata, followed by new releases and general games. A small curated set provides discovery entry points; names, prices, artwork and Linux flags are fetched from Steam, and games without an explicit current Linux flag are excluded from the native section.
 Steam artwork, storefront pricing, controller metadata and Linux platform flags come
 from Steam's public store endpoints. These endpoints are not a guaranteed stable API.
 The Netherlands region is used for displayed prices. Cached featured metadata remains

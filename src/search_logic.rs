@@ -429,6 +429,22 @@ pub fn explore_results_data(
                 WaylandFilter::All,
             )
         }
+        ExplorePage::LinuxGames => generic_search(
+            apps,
+            backends,
+            app_stats,
+            os_codename,
+            |_id, info, _installed, _downloads, _compat| {
+                (info
+                    .categories
+                    .iter()
+                    .any(|c| c == crate::catalog::NATIVE_LINUX)
+                    && info.categories.iter().any(|c| c == "Game"))
+                .then_some(0)
+            },
+            SearchSortMode::Relevance,
+            WaylandFilter::All,
+        ),
         ExplorePage::NewApps => generic_search(
             apps,
             backends,
@@ -577,6 +593,12 @@ fn calculate_explore_weight(
                 None
             }
         }
+        ExplorePage::LinuxGames => (info
+            .categories
+            .iter()
+            .any(|c| c == crate::catalog::NATIVE_LINUX)
+            && info.categories.iter().any(|c| c == "Game"))
+        .then_some(0),
         ExplorePage::NewApps => info
             .categories
             .iter()

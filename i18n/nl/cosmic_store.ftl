@@ -158,3 +158,5 @@ compatibility-estimates-help = Optionele Wayland-inschattingen gelden voor zoekr
 wayland-filter = Wayland-inschatting bij zoeken
 
 include-proton-games = Toon ook games die Proton vereisen
+
+linux-games = Games met native Linux-ondersteuning

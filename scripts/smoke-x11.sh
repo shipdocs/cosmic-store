@@ -23,7 +23,13 @@ if [ -z "$window_id" ]; then
     exit 1
 fi
 # Give background storefront discovery time to populate the first rows.
-sleep 20
+for attempt in $(seq 1 75); do
+    if grep -Eq 'local catalog ready: [1-9][0-9]* results' "$output/startup.log"; then break; fi
+    kill -0 "$app_pid"
+    sleep 1
+done
+grep -Eq 'local catalog ready: [1-9][0-9]* results' "$output/startup.log"
+sleep 2
 kill -0 "$app_pid"
 import -window "$window_id" "$output/store-x11.png"
 test -s "$output/store-x11.png"

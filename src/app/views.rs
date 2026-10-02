@@ -351,6 +351,7 @@ pub fn render_explore_page<'a>(
     explore_page_opt: &'a Option<ExplorePage>,
     explore_results: &'a HashMap<ExplorePage, Vec<SearchResult>>,
     loading_frame: usize,
+    explore_loading: bool,
     results_limit: usize,
     spacing: cosmic_theme::Spacing,
     grid_width: usize,
@@ -457,7 +458,7 @@ pub fn render_explore_page<'a>(
                     .class(theme::Container::Card),
                 )
                 .push(widget::Space::with_height(space_m));
-            if explore_results.is_empty() {
+            if explore_loading {
                 column = column.push(
                     widget::container(
                         widget::column::with_children(vec![
@@ -481,6 +482,8 @@ pub fn render_explore_page<'a>(
                     .align_x(Alignment::Center)
                     .align_y(Alignment::Center),
                 );
+            } else if explore_results.values().all(Vec::is_empty) {
+                column = column.push(empty_catalog());
             } else {
                 for explore_page in explore_pages.iter() {
                     if *explore_page == ExplorePage::MadeForCosmic
@@ -754,15 +757,21 @@ pub fn render_header_end<'a>(mode: &Mode) -> Vec<Element<'a, Message>> {
         Mode::Normal => {
             vec![
                 widget::tooltip(
-                    widget::button::icon(widget::icon::from_name("application-menu-symbolic"))
-                        .on_press(Message::ToggleContextPage(ContextPage::Repositories)),
+                    widget::button::icon(widget::icon::icon(icon_cache_handle(
+                        "store-sources-symbolic",
+                        16,
+                    )))
+                    .on_press(Message::ToggleContextPage(ContextPage::Repositories)),
                     widget::text(fl!("manage-repositories")),
                     widget::tooltip::Position::Bottom,
                 )
                 .into(),
                 widget::tooltip(
-                    widget::button::icon(widget::icon::from_name("preferences-system-symbolic"))
-                        .on_press(Message::ToggleContextPage(ContextPage::Settings)),
+                    widget::button::icon(widget::icon::icon(icon_cache_handle(
+                        "store-settings-symbolic",
+                        16,
+                    )))
+                    .on_press(Message::ToggleContextPage(ContextPage::Settings)),
                     widget::text(fl!("settings")),
                     widget::tooltip::Position::Bottom,
                 )

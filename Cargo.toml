@@ -109,3 +109,7 @@ members = ["flathub-stats"]
 
 # [patch.'https://github.com/jackpot51/spdx.git']
 # spdx = { path = "../../spdx" }
+
+# Preserve the locked renderer API while fixing stale image batches on resize.
+[patch.'https://github.com/pop-os/libcosmic.git']
+iced_wgpu = { path = "patches/iced_wgpu" }

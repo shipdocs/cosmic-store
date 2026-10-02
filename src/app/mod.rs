@@ -115,6 +115,7 @@ pub struct App {
     pub(crate) native_only: bool,
     pub(crate) results_limit: usize,
     pub(crate) search_pending: bool,
+    pub(crate) explore_loading: bool,
     pub(crate) search_sort_options: Vec<String>,
     pub(crate) wayland_filter: WaylandFilter,
     pub(crate) wayland_filter_options: Vec<String>,
@@ -249,7 +250,8 @@ impl App {
         )
     }
 
-    pub(crate) fn explore_results_all_batch(&self) -> Task<Message> {
+    pub(crate) fn explore_results_all_batch(&mut self) -> Task<Message> {
+        self.explore_loading = true;
         data::explore_results_all_batch_task(
             self.apps.clone(),
             self.backends.clone(),
@@ -333,7 +335,7 @@ impl App {
         crate::search_logic::sort_results(results, self.search_sort_mode, &self.app_stats);
     }
 
-    pub(crate) fn refresh_store(&self) -> Task<Message> {
+    pub(crate) fn refresh_store(&mut self) -> Task<Message> {
         let mut tasks = vec![self.explore_results_all_batch()];
         if let Some(categories) = self
             .nav_model
@@ -1277,6 +1279,7 @@ impl App {
             &self.explore_page_opt,
             &self.explore_results,
             self.loading_frame,
+            self.explore_loading || self.backends.is_empty(),
             self.results_limit,
             spacing,
             grid_width,
@@ -1560,6 +1563,7 @@ impl Application for App {
             native_only: true,
             results_limit: crate::constants::MAX_RESULTS,
             search_pending: false,
+            explore_loading: true,
             search_sort_options,
             wayland_filter: WaylandFilter::All,
             wayland_filter_options,

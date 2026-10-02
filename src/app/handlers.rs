@@ -696,11 +696,16 @@ pub fn update(app: &mut App, message: Message) -> Task<Message> {
             app.explore_results.insert(explore_page, results);
         }
         Message::ExploreResultsReady(results_map) => {
+            app.explore_loading = false;
             // Batch results received - load icons and insert all at once
             for (explore_page, mut results) in results_map {
                 app.filter_store_results(&mut results);
                 app.load_icons_for_results(&mut results);
                 app.explore_results.insert(explore_page, results);
+            }
+            if app.backends.contains_key("packagekit") {
+                let visible: usize = app.explore_results.values().map(Vec::len).sum();
+                log::info!("local catalog ready: {} results", visible);
             }
         }
         Message::GStreamerExit(code) => match app.mode {

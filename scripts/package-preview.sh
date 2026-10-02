@@ -18,6 +18,8 @@ while IFS= read -r icon; do
     install -Dm0644 "$icon" "$staging/usr/share/icons/${icon#res/icons/}"
 done < <(find res/icons/hicolor -type f -name '*.svg')
 install -Dm0644 LICENSE "$staging/usr/share/doc/cosmic-store/copyright"
+install -Dm0644 patches/iced_wgpu/LICENSE "$staging/usr/share/doc/cosmic-store/iced-wgpu-license"
+install -Dm0644 patches/iced_wgpu/KOMPAS-PATCH.md "$staging/usr/share/doc/cosmic-store/renderer-patch.md"
 mkdir -p "$staging/DEBIAN"
 # Resolve the actual binary's linked libraries on the target Ubuntu release.
 dependencies=$(dpkg-shlibdeps -O -e"$staging/usr/bin/cosmic-store" | sed -n 's/^shlibs:Depends=//p')

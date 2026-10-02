@@ -526,6 +526,19 @@ pub fn update(app: &mut App, message: Message) -> Task<Message> {
             }
             return Task::none();
         }
+        Message::CatalogLoaded(apps) => {
+            app.catalog_apps = apps;
+            app.update_apps();
+            let mut tasks = vec![
+                app.explore_results_all_batch(),
+                super::data::catalog_images_task(app.catalog_apps.clone()),
+            ];
+            if app.search_active {
+                tasks.push(app.search());
+            }
+            return Task::batch(tasks);
+        }
+        Message::CatalogImagesReady => return Task::none(),
         Message::Apps(apps) => {
             app.apps = apps;
             return Task::none();

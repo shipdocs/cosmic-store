@@ -34,6 +34,9 @@ pub fn render_search_results<'a>(
         .spacing(spacing.space_xxs)
         .width(Length::Fill);
 
+    if !crate::catalog::alternatives(input).is_empty() {
+        column = column.push(widget::text::body(fl!("alternative-results")));
+    }
     if results.is_empty() {
         column = column.push(widget::text::body(fl!("no-results", search = input)));
     }
@@ -410,6 +413,10 @@ pub fn render_explore_page<'a>(
                 .padding([0, space_s, space_m, space_s])
                 .spacing(space_xxs)
                 .width(Length::Fill);
+            column = column
+                .push(widget::text::title1(fl!("store-welcome")))
+                .push(widget::text::body(fl!("store-intro")))
+                .push(widget::Space::with_height(space_m));
             if explore_results.is_empty() {
                 column = column.push(
                     widget::container(

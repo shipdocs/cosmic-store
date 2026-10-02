@@ -209,31 +209,84 @@ pub fn search_task(
         return url_handlers::handle_gstreamer_codec(&backends, input.clone(), gstreamer_codec);
     }
 
-    Task::perform(
-        async move {
-            tokio::task::spawn_blocking(move || {
-                let start = Instant::now();
-                let results = crate::search_logic::search_results(
+    use cosmic::iced::{futures::SinkExt, stream};
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static SEARCH_GENERATION: AtomicU64 = AtomicU64::new(0);
+    let generation = SEARCH_GENERATION.fetch_add(1, Ordering::Relaxed) + 1;
+    Task::run(
+        stream::channel(2, move |mut output| async move {
+            let local_input = input.clone();
+            let results = tokio::task::spawn_blocking(move || {
+                crate::search_logic::search_results(
                     &apps,
                     &backends,
                     &app_stats,
                     &os_codename,
-                    &input,
+                    &local_input,
                     sort_mode,
                     wayland_filter,
-                );
-                let duration = start.elapsed();
-                log::info!(
-                    "searched for {:?} in {:?}, found {} results",
-                    input,
-                    duration,
-                    results.len()
-                );
-                action::app(Message::SearchResults(input, results, false))
+                )
             })
             .await
-            .unwrap_or(action::none())
+            .unwrap_or_default();
+            if SEARCH_GENERATION.load(Ordering::Relaxed) != generation {
+                return;
+            }
+            let _ = output
+                .send(Message::SearchResults(
+                    input.clone(),
+                    results.clone(),
+                    false,
+                ))
+                .await;
+            if wayland_filter != WaylandFilter::All || input.trim().chars().count() < 2 {
+                return;
+            }
+            // Let typing settle before making a remote request. Old queries cannot overwrite new ones.
+            tokio::time::sleep(std::time::Duration::from_millis(350)).await;
+            if SEARCH_GENERATION.load(Ordering::Relaxed) != generation {
+                return;
+            }
+            let remote_input = input.clone();
+            let external = tokio::task::spawn_blocking(move || {
+                crate::catalog::search(&remote_input).unwrap_or_else(|error| {
+                    log::warn!("Steam search unavailable: {error}");
+                    Vec::new()
+                })
+            })
+            .await
+            .unwrap_or_default();
+            if SEARCH_GENERATION.load(Ordering::Relaxed) != generation {
+                return;
+            }
+            let mut combined = results;
+            let mut ids: std::collections::HashSet<_> =
+                combined.iter().map(|r| r.id.clone()).collect();
+            combined.extend(external.into_iter().filter(|r| ids.insert(r.id.clone())));
+            let _ = output
+                .send(Message::SearchResults(input, combined, false))
+                .await;
+        }),
+        action::app,
+    )
+}
+
+pub fn catalog_task() -> Task<Message> {
+    Task::perform(
+        async {
+            tokio::task::spawn_blocking(crate::catalog::featured)
+                .await
+                .unwrap_or_default()
         },
-        |x| x,
+        |apps| action::app(Message::CatalogLoaded(apps)),
+    )
+}
+
+pub fn catalog_images_task(apps: Apps) -> Task<Message> {
+    Task::perform(
+        async move {
+            let _ = tokio::task::spawn_blocking(move || crate::catalog::cache_images(&apps)).await;
+        },
+        |_| action::app(Message::CatalogImagesReady),
     )
 }

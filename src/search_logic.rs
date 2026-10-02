@@ -32,7 +32,7 @@ pub fn generic_search<
         crate::app_id::AppId,
         (u64, Option<WaylandCompatibility>),
     >,
-    os_codename: &str,
+    _os_codename: &str,
     filter_map: F,
     sort_mode: SearchSortMode,
     wayland_filter: WaylandFilter,
@@ -53,22 +53,8 @@ pub fn generic_search<
                 installed,
             } in infos.iter()
             {
-                let is_flatpak = backend_name.starts_with("flatpak-");
-
-                if !is_flatpak {
-                    if let Some(origin) = &info.origin_opt {
-                        if !origin.is_empty() && !origin.contains(os_codename) {
-                            /*
-                            log::debug!(
-                                "Filtering out {} due to origin mismatch: {} (expected {})",
-                                info.name,
-                                origin,
-                                os_codename
-                            );
-                            */
-                            continue;
-                        }
-                    }
+                if !entry_available(backend_name, info, *installed, _backends) {
+                    continue;
                 }
 
                 if let Some(weight) =
@@ -89,7 +75,9 @@ pub fn generic_search<
                 backend_name,
                 info,
                 installed: _,
-            } = infos.first()?;
+            } = infos.iter().find(|entry| {
+                entry_available(entry.backend_name, &entry.info, entry.installed, _backends)
+            })?;
 
             if wayland_filter != WaylandFilter::All {
                 let compat_opt = stats_compat.or_else(|| info.wayland_compat_lazy());
@@ -288,6 +276,12 @@ pub fn search_results(
             if let Some(weight) = regex_weight(&info.description, 6) {
                 return Some(weight);
             }
+            if crate::catalog::alternatives(input)
+                .iter()
+                .any(|name| info.name.eq_ignore_ascii_case(name))
+            {
+                return Some(stats_weight(9));
+            }
             None
         },
         sort_mode,
@@ -424,12 +418,14 @@ pub fn explore_results_data(
             app_stats,
             os_codename,
             |_id,
-             _info,
+             info,
              _installed,
              _stats_downloads: Option<u64>,
              _stats_compat: Option<WaylandCompatibility>| {
-                //TODO
-                None
+                info.categories
+                    .iter()
+                    .any(|c| c == crate::catalog::NEW_RELEASE)
+                    .then_some(0)
             },
             SearchSortMode::Relevance,
             WaylandFilter::All,
@@ -564,10 +560,11 @@ fn calculate_explore_weight(
                 None
             }
         }
-        ExplorePage::NewApps => {
-            //TODO
-            None
-        }
+        ExplorePage::NewApps => info
+            .categories
+            .iter()
+            .any(|c| c == crate::catalog::NEW_RELEASE)
+            .then_some(0),
         ExplorePage::RecentlyUpdated => {
             if !matches!(info.kind, AppKind::DesktopApplication) {
                 return None;
@@ -616,7 +613,7 @@ pub fn explore_results_all(
         crate::app_id::AppId,
         (u64, Option<WaylandCompatibility>),
     >,
-    os_codename: &str,
+    _os_codename: &str,
     now: i64,
 ) -> std::collections::HashMap<ExplorePage, Vec<SearchResult>> {
     use std::collections::HashMap;
@@ -636,20 +633,16 @@ pub fn explore_results_all(
         let Some(AppEntry {
             backend_name,
             info,
-            installed: _,
-        }) = infos.first()
+            installed,
+        }) = infos.iter().find(|entry| {
+            entry_available(entry.backend_name, &entry.info, entry.installed, _backends)
+        })
         else {
             continue;
         };
 
-        // Check origin filter for non-flatpak apps
-        let is_flatpak = backend_name.starts_with("flatpak-");
-        if !is_flatpak {
-            if let Some(origin) = &info.origin_opt {
-                if !origin.is_empty() && !origin.contains(os_codename) {
-                    continue;
-                }
-            }
+        if !entry_available(backend_name, info, *installed, _backends) {
+            continue;
         }
 
         let downloads = stats_downloads.unwrap_or(info.monthly_downloads);
@@ -713,6 +706,38 @@ mod tests {
     }
 
     #[test]
+    fn zorin_origin_is_visible_in_search_and_discovery() {
+        let info = AppInfo {
+            name: "Zorin App".to_string(),
+            origin_opt: Some("zorin".to_string()),
+            pkgnames: vec!["zorin-app".to_string()],
+            ..AppInfo::default()
+        };
+        let mut apps = Apps::new();
+        apps.insert(
+            AppId::new("org.zorin.Example"),
+            vec![AppEntry {
+                backend_name: "packagekit",
+                info: Arc::new(info),
+                installed: true,
+            }],
+        );
+        let results = search_results(
+            &apps,
+            &Backends::new(),
+            &HashMap::new(),
+            "noble",
+            "Zorin",
+            SearchSortMode::Relevance,
+            WaylandFilter::All,
+        );
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].backend_name(), "packagekit");
+        let discovery = explore_results_all(&apps, &Backends::new(), &HashMap::new(), "noble", 0);
+        assert_eq!(discovery[&ExplorePage::PopularApps].len(), 1);
+    }
+
+    #[test]
     fn discovery_preserves_popularity_without_external_stats() {
         let results = explore_results_all(
             &sample_apps(),
@@ -746,4 +771,18 @@ mod tests {
         );
         assert_eq!(results[0].info.name, "Zulu");
     }
+}
+
+fn entry_available(
+    backend_name: &str,
+    info: &crate::app_info::AppInfo,
+    installed: bool,
+    backends: &Backends,
+) -> bool {
+    if installed || backend_name != "packagekit" {
+        return true;
+    }
+    backends
+        .get("packagekit")
+        .is_none_or(|backend| backend.is_package_available(&info.pkgnames))
 }

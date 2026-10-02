@@ -42,6 +42,8 @@ pub enum Message {
         ),
     ),
     Apps(Arc<crate::app_entry::Apps>),
+    CatalogLoaded(crate::app_entry::Apps),
+    CatalogImagesReady,
     CategoryResults(&'static [Category], Vec<SearchResult>),
     CheckUpdates,
     Config(Config),

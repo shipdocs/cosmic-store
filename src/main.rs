@@ -3,6 +3,7 @@
 
 use clap::Parser;
 
+mod catalog;
 mod constants;
 
 mod utils;

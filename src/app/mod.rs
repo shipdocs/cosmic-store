@@ -89,6 +89,7 @@ pub struct App {
     pub(crate) os_codename: String,
     pub(crate) app_themes: Vec<String>,
     pub(crate) apps: Arc<Apps>,
+    pub(crate) catalog_apps: Apps,
     pub(crate) backends: Backends,
     pub(crate) context_page: ContextPage,
     pub(crate) dialog_pages: VecDeque<DialogPage>,
@@ -305,6 +306,23 @@ impl App {
         selected_info: &Arc<AppInfo>,
         addon: bool,
     ) -> Vec<Element<'_, Message>> {
+        if selected_backend_name == crate::catalog::STEAM {
+            if let Some(id) = crate::catalog::steam_id(selected_info) {
+                return vec![
+                    widget::button::suggested(fl!("steam-install"))
+                        .on_press(Message::LaunchUrl(crate::catalog::install_url(id)))
+                        .into(),
+                    widget::button::standard(fl!("steam-store"))
+                        .on_press(Message::LaunchUrl(crate::catalog::store_url(id)))
+                        .into(),
+                    widget::button::standard(fl!("steam-compatibility"))
+                        .on_press(Message::LaunchUrl(format!(
+                            "https://www.protondb.com/app/{id}"
+                        )))
+                        .into(),
+                ];
+            }
+        }
         //TODO: more efficient checks
         let mut waiting_refresh = false;
         for (backend_name, source_id, package_id) in self
@@ -681,6 +699,7 @@ impl App {
             }
         }
 
+        apps.extend(self.catalog_apps.clone());
         self.apps = Arc::new(apps);
 
         // Update selected sources
@@ -1284,6 +1303,7 @@ impl Application for App {
             os_codename,
             app_themes,
             apps: Arc::new(Apps::new()),
+            catalog_apps: Apps::new(),
             backends: Backends::new(),
             context_page: ContextPage::Settings,
             dialog_pages: VecDeque::new(),
@@ -1338,6 +1358,7 @@ impl Application for App {
 
         let command = Task::batch([
             app.update_title(),
+            data::catalog_task(),
             app.update_backends(false),
             Task::perform(
                 async move {

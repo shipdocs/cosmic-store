@@ -150,12 +150,12 @@ impl Packagekit {
         let connection = Connection::system()?;
         let source_id = "packagekit";
         //TODO: translate?
-        let source_name = "System";
+        let source_name = crate::fl!("system-packages");
         Ok(Self {
             connection,
             appstream_caches: vec![AppstreamCache::system(
                 source_id.to_string(),
-                source_name.to_string(),
+                source_name,
                 locale,
             )],
             available_packages_cache: Arc::new(Mutex::new(None)),
@@ -168,7 +168,7 @@ impl Packagekit {
         let start = Instant::now();
 
         let tx = self.transaction()?;
-        tx.get_packages(FilterKind::NotInstalled as u64 | FilterKind::Arch as u64)?;
+        tx.get_packages(FilterKind::Arch as u64)?;
         let packages = self.package_transaction(tx)?;
 
         let mut available = HashSet::new();

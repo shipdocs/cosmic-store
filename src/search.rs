@@ -142,6 +142,36 @@ impl SearchResult {
             name_row.push(badge);
         }
 
+        if self.backend_name == crate::catalog::STEAM {
+            let mut card = widget::column::new().spacing(spacing.space_xxs);
+            if let Some(path) = crate::catalog::image_path(&self.info).filter(|p| p.is_file()) {
+                card = card.push(
+                    widget::image(widget::image::Handle::from_path(path))
+                        .width(Length::Fill)
+                        .height(Length::Fixed(112.0)),
+                );
+            } else {
+                card = card.push(
+                    widget::container(
+                        widget::icon::from_name("applications-games-symbolic").size(48),
+                    )
+                    .height(Length::Fixed(112.0))
+                    .width(Length::Fill)
+                    .align_x(Alignment::Center)
+                    .align_y(Alignment::Center),
+                );
+            }
+            return widget::container(
+                card.push(widget::text::body(&self.info.name))
+                    .push(widget::text::caption(&self.info.summary))
+                    .push(widget::text::caption("Steam")),
+            )
+            .width(Length::Fixed(width as f32))
+            .height(Length::Fixed(224.0))
+            .padding(spacing.space_s)
+            .class(theme::Container::Card)
+            .into();
+        }
         widget::container(
             widget::row::with_children(vec![
                 match &self.icon_opt {
@@ -158,6 +188,7 @@ impl SearchResult {
                         .height(Length::Fixed(28.0))
                         .into(),
                     widget::row::with_children(vec![
+                        widget::text::caption(&self.info.source_name).into(),
                         if self.info.source_id == "flathub" && self.info.monthly_downloads > 0 {
                             widget::tooltip(
                                 widget::text::caption(format_download_count(

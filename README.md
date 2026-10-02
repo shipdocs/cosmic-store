@@ -1,4 +1,4 @@
-# ShipDocs Store (COSMIC-based)
+# Kompas (COSMIC-based)
 
 An independently maintained fork of [COSMIC Store](https://github.com/pop-os/cosmic-store), targeting Zorin and Ubuntu desktops. It combines Flatpak and PackageKit with software discovery and estimated Wayland compatibility.
 
@@ -118,3 +118,11 @@ in the web store, and check ProtonDB. Installation requires a working Steam URI 
 and any required game license. Steam artwork is cached locally; an empty cache displays
 a game icon until images arrive. This does not claim that every Windows game or online
 mode works on Linux. No Epic/GOG login, purchase or account linking is performed.
+
+### Unified browsing and compatibility
+
+“All apps” lists applications from the configured system/Flatpak catalogs and the fetched Steam featured selection. Live search extends Steam discovery; this is not an exhaustive local index of Steam. The source selector applies to search, category lists and home sections, and can choose a Flatpak alternative when the preferred source is a system package. All result sources share sorting, including Name (A–Z). Popularity and update sorts place items with missing metadata after items with known values; Steam sales are not converted to Flatpak download counts.
+
+Native Linux only is enabled by default. It hides Steam titles unless Steam explicitly reports a native Linux version. Disable it to include titles requiring a Proton compatibility check. PackageKit availability is checked against the configured system; Flatpak catalogs are selected by libflatpak for the host architecture. Native support does not establish that a particular GPU, driver, RAM configuration, anti-cheat setup or desktop session meets an app's requirements. Hardware/Proton compatibility inference remains future work. This conservative default intentionally hides many Windows games that can run well with Proton.
+
+The user-facing product name is **Kompas**, a working name rather than a cleared trademark. The executable and application ID remain `cosmic-store` / `com.system76.CosmicStore` for upgrade compatibility.

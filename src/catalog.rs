@@ -8,13 +8,14 @@ use serde_json::Value;
 use std::{collections::HashSet, error::Error, fs, path::PathBuf, sync::Arc, time::Duration};
 
 pub const STEAM: &str = "steam";
+pub const NATIVE_LINUX: &str = "X-ShipDocs-NativeLinux";
 pub const NEW_RELEASE: &str = "X-ShipDocs-NewRelease";
 
 fn client() -> Result<reqwest::blocking::Client, reqwest::Error> {
     reqwest::blocking::Client::builder()
         .timeout(Duration::from_secs(8))
         .connect_timeout(Duration::from_secs(3))
-        .user_agent("ShipDocsStore/0.1")
+        .user_agent("Kompas/0.1")
         .build()
 }
 
@@ -105,6 +106,9 @@ fn item_info(item: &Value, new_release: bool) -> Option<(AppId, Arc<AppInfo>)> {
         })
         .unwrap_or_default();
     let mut categories = vec!["Game".to_string()];
+    if linux {
+        categories.push(NATIVE_LINUX.to_string());
+    }
     if new_release {
         categories.push(NEW_RELEASE.to_string());
     }
@@ -148,6 +152,9 @@ fn parse_featured(value: &Value) -> Apps {
 }
 
 pub fn featured() -> Apps {
+    if std::env::consts::ARCH != "x86_64" {
+        return Apps::new();
+    }
     let cached = cache_path()
         .and_then(|p| fs::read(p).ok())
         .and_then(|b| serde_json::from_slice::<Value>(&b).ok());
@@ -176,6 +183,9 @@ pub fn featured() -> Apps {
 }
 
 pub fn search(term: &str) -> Result<Vec<SearchResult>, Box<dyn Error>> {
+    if std::env::consts::ARCH != "x86_64" {
+        return Ok(Vec::new());
+    }
     let term = if term.trim().eq_ignore_ascii_case("gta") {
         "Grand Theft Auto"
     } else {

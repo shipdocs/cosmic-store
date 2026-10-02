@@ -1,4 +1,4 @@
-app-name = חנות COSMIC
+app-name = Kompas
 back = חזרה
 cancel = ביטול
 check-for-updates = איתור עדכונים

@@ -13,13 +13,13 @@ for attempt in $(seq 1 25); do
         cat "$output/startup.log"
         exit 1
     fi
-    window_id=$(xwininfo -root -tree | awk '/ShipDocs Store/ { print $1; exit }')
+    window_id=$(xwininfo -root -tree | awk '/Kompas/ { print $1; exit }')
     if [ -n "$window_id" ]; then break; fi
     sleep 1
 done
 if [ -z "$window_id" ]; then
     cat "$output/startup.log"
-    echo 'ShipDocs Store did not create an X11 window.' >&2
+    echo 'Kompas did not create an X11 window.' >&2
     exit 1
 fi
 # Give background storefront discovery time to populate the first rows.

@@ -1,4 +1,4 @@
-app-name = COSMIC Sovelluskauppa
+app-name = Kompas
 back = Takaisin
 cancel = Keskeytä
 check-for-updates = Tarkista päivitysten varalta

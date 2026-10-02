@@ -29,7 +29,7 @@ Depends:
     ${misc:Depends},
     ${shlibs:Depends}
 Recommends: flatpak, packagekit, adwaita-icon-theme
-Description: ShipDocs software store for Zorin and Ubuntu
+Description: Kompas software store for Zorin and Ubuntu
  A fork of COSMIC Store with Flatpak and PackageKit integration,
  download-based discovery and estimated Wayland compatibility badges.
  Targets Zorin and Ubuntu desktops without Pop!_OS-specific data packages.

@@ -27,6 +27,7 @@ pub enum SearchSortMode {
     MostDownloads,
     RecentlyUpdated,
     BestWaylandSupport,
+    Name,
 }
 
 /// Wayland compatibility filter mode
@@ -38,6 +39,35 @@ pub enum WaylandFilter {
     Caution,   // High risk
     Limited,   // Critical risk
     Unknown,
+}
+
+/// Storefront source and conservative Linux compatibility filters.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum StoreSource {
+    #[default]
+    All,
+    System,
+    Flatpak,
+    Steam,
+}
+
+impl StoreSource {
+    pub fn matches(self, backend: &str) -> bool {
+        match self {
+            Self::All => true,
+            Self::System => backend == "packagekit",
+            Self::Flatpak => matches!(backend, "flatpak-user" | "flatpak-system"),
+            Self::Steam => backend == crate::catalog::STEAM,
+        }
+    }
+}
+
+pub fn native_linux(backend: &str, info: &AppInfo) -> bool {
+    backend != crate::catalog::STEAM
+        || info
+            .categories
+            .iter()
+            .any(|c| c == crate::catalog::NATIVE_LINUX)
 }
 
 /// A search result from a backend
@@ -240,5 +270,28 @@ impl SearchResult {
         .padding([spacing.space_xxs, spacing.space_s])
         .class(theme::Container::Card)
         .into()
+    }
+}
+
+#[cfg(test)]
+mod store_filter_tests {
+    use super::*;
+    #[test]
+    fn source_filter_includes_both_flatpak_installations() {
+        assert!(StoreSource::Flatpak.matches("flatpak-user"));
+        assert!(StoreSource::Flatpak.matches("flatpak-system"));
+        assert!(!StoreSource::Flatpak.matches("packagekit"));
+        assert!(StoreSource::System.matches("packagekit"));
+        assert!(StoreSource::Steam.matches("steam"));
+    }
+    #[test]
+    fn native_filter_requires_explicit_linux_support_for_steam() {
+        let mut info = AppInfo::default();
+        assert!(!native_linux("steam", &info));
+        assert!(native_linux("flatpak-user", &info));
+        assert!(native_linux("packagekit", &info));
+        info.categories
+            .push(crate::catalog::NATIVE_LINUX.to_string());
+        assert!(native_linux("steam", &info));
     }
 }

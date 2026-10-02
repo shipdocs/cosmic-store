@@ -1,4 +1,4 @@
-app-name = ShipDocs Store
+app-name = Kompas
 back = Terug
 cancel = Annuleer
 install = Installeren
@@ -126,3 +126,8 @@ steam-install = Installeren via Steam
 steam-store = Bekijken / kopen in Steam
 steam-compatibility = Controleer ProtonDB
 alternative-results = Beschikbare alternatieven uit je ingestelde softwarebronnen:
+
+all-apps = Alle apps
+source-all = Alle bronnen
+native-linux-only = Alleen native Linux (verberg games die Proton vereisen)
+sort-name = Naam (A–Z)

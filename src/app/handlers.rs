@@ -66,6 +66,7 @@ pub fn handle_config_message(app: &mut App, message: Message) -> Task<Message> {
 pub fn handle_search_message(app: &mut App, message: Message) -> Task<Message> {
     match message {
         Message::CategoryResults(categories, mut results) => {
+            app.filter_store_results(&mut results);
             app.load_icons_for_results(&mut results);
             app.category_results = Some((categories, results));
             app.update_scroll()
@@ -97,6 +98,7 @@ pub fn handle_search_message(app: &mut App, message: Message) -> Task<Message> {
         }
         Message::SearchAugmented(input, mut results) => {
             if input == app.search_input {
+                app.filter_store_results(&mut results);
                 app.load_icons_for_results(&mut results);
                 app.search_results = Some((input, results));
                 if app.details_page_opt.is_none() {
@@ -107,6 +109,7 @@ pub fn handle_search_message(app: &mut App, message: Message) -> Task<Message> {
         }
         Message::SearchResults(input, mut results, auto_select) => {
             if input == app.search_input {
+                app.filter_store_results(&mut results);
                 app.load_icons_for_results(&mut results);
 
                 app.details_page_opt = None;
@@ -183,11 +186,15 @@ pub fn handle_search_message(app: &mut App, message: Message) -> Task<Message> {
         }
         Message::SearchSortMode(sort_mode) => {
             app.search_sort_mode = sort_mode;
-            if !app.search_input.is_empty() {
-                app.search()
-            } else {
-                Task::none()
-            }
+            app.refresh_store()
+        }
+        Message::StoreSource(source) => {
+            app.store_source = source;
+            app.refresh_store()
+        }
+        Message::NativeOnly(value) => {
+            app.native_only = value;
+            app.refresh_store()
         }
         Message::WaylandFilter(filter) => {
             app.wayland_filter = filter;
@@ -540,7 +547,7 @@ pub fn update(app: &mut App, message: Message) -> Task<Message> {
             app.catalog_apps = apps;
             app.update_apps();
             let mut tasks = vec![
-                app.explore_results_all_batch(),
+                app.refresh_store(),
                 super::data::catalog_images_task(app.catalog_apps.clone()),
             ];
             if app.search_active {
@@ -578,6 +585,8 @@ pub fn update(app: &mut App, message: Message) -> Task<Message> {
         | Message::SearchInput(_)
         | Message::SearchResults(..)
         | Message::SearchAugmented(..)
+        | Message::StoreSource(_)
+        | Message::NativeOnly(_)
         | Message::SearchSortMode(_)
         | Message::SearchSubmit(_)
         | Message::WaylandFilter(_) => {
@@ -614,12 +623,14 @@ pub fn update(app: &mut App, message: Message) -> Task<Message> {
         Message::ExploreResults(explore_page, results) => {
             // Load icons lazily when results are received (not during search)
             let mut results = results;
+            app.filter_store_results(&mut results);
             app.load_icons_for_results(&mut results);
             app.explore_results.insert(explore_page, results);
         }
         Message::ExploreResultsReady(results_map) => {
             // Batch results received - load icons and insert all at once
             for (explore_page, mut results) in results_map {
+                app.filter_store_results(&mut results);
                 app.load_icons_for_results(&mut results);
                 app.explore_results.insert(explore_page, results);
             }

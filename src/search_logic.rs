@@ -113,7 +113,25 @@ pub fn generic_search<
         })
         .collect();
 
+    sort_results(&mut results, sort_mode, app_stats);
+
+    // Icons are now loaded lazily in the view layer to avoid expensive I/O during search
+    log::warn!("Search algorithm took {:?}", search_start.elapsed());
+    results
+}
+
+pub fn sort_results(
+    results: &mut [SearchResult],
+    sort_mode: SearchSortMode,
+    app_stats: &std::collections::HashMap<
+        crate::app_id::AppId,
+        (u64, Option<WaylandCompatibility>),
+    >,
+) {
     match sort_mode {
+        SearchSortMode::Name => {
+            results.par_sort_unstable_by(|a, b| LANGUAGE_SORTER.compare(&a.info.name, &b.info.name))
+        }
         SearchSortMode::Relevance => {
             results.par_sort_unstable_by(|a, b| match a.weight.cmp(&b.weight) {
                 cmp::Ordering::Equal => match LANGUAGE_SORTER.compare(&a.info.name, &b.info.name) {
@@ -198,10 +216,6 @@ pub fn generic_search<
             });
         }
     }
-
-    // Icons are now loaded lazily in the view layer to avoid expensive I/O during search
-    log::warn!("Search algorithm took {:?}", search_start.elapsed());
-    results
 }
 
 /// Extracted search logic
@@ -315,6 +329,9 @@ pub fn categories_results(
                 return None;
             }
             let downloads = stats_downloads.unwrap_or(info.monthly_downloads);
+            if categories.is_empty() {
+                return Some(-(downloads as i64));
+            }
             for category in categories {
                 //TODO: this hack makes it easier to add applets to the nav bar
                 if matches!(category, Category::CosmicApplet) {

@@ -1,4 +1,4 @@
-app-name = Sklep COSMIC
+app-name = Kompas
 back = Powrót
 cancel = Anuluj
 check-for-updates = Sprawdź aktualizacje

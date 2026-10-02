@@ -34,6 +34,7 @@ pub enum DialogPage {
 pub enum NavPage {
     #[default]
     Explore,
+    AllApps,
     Create,
     Work,
     Develop,
@@ -51,6 +52,7 @@ impl NavPage {
     pub fn all() -> &'static [Self] {
         &[
             Self::Explore,
+            Self::AllApps,
             Self::Create,
             Self::Work,
             Self::Develop,
@@ -69,6 +71,7 @@ impl NavPage {
         use crate::fl;
         match self {
             Self::Explore => fl!("explore"),
+            Self::AllApps => fl!("all-apps"),
             Self::Create => fl!("create"),
             Self::Work => fl!("work"),
             Self::Develop => fl!("develop"),
@@ -85,6 +88,7 @@ impl NavPage {
 
     pub fn categories(&self) -> Option<&'static [Category]> {
         match self {
+            Self::AllApps => Some(&[]),
             Self::Create => Some(&[Category::AudioVideo, Category::Graphics]),
             Self::Work => Some(&[Category::Development, Category::Office, Category::Science]),
             Self::Develop => Some(&[Category::Development]),
@@ -101,6 +105,7 @@ impl NavPage {
     pub fn icon(&self) -> cosmic::widget::icon::Icon {
         use crate::icon_cache::icon_cache_icon;
         match self {
+            Self::AllApps => icon_cache_icon("view-grid-symbolic", 16),
             Self::Explore => icon_cache_icon("store-home-symbolic", 16),
             Self::Create => icon_cache_icon("store-create-symbolic", 16),
             Self::Work => icon_cache_icon("store-work-symbolic", 16),

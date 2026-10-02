@@ -16,7 +16,7 @@ use crate::icon_cache::icon_cache_handle;
 use crate::message::Message;
 use crate::operation::{Operation, OperationKind};
 use crate::pages::{ContextPage, DialogPage, ExplorePage, NavPage};
-use crate::search::{SearchResult, SearchSortMode, WaylandFilter};
+use crate::search::{SearchResult, WaylandFilter};
 use crate::source::{Source, SourceKind};
 use crate::ui::{GridMetrics, package_card_view};
 
@@ -695,8 +695,8 @@ pub fn render_header_start<'a>(
     search_active: bool,
     search_input: &'a str,
     search_id: widget::Id,
-    search_sort_options: &'a [String],
-    search_sort_mode: SearchSortMode,
+    _search_sort_options: &'a [String],
+    _search_sort_mode: crate::search::SearchSortMode,
     wayland_filter_options: &'a [String],
     wayland_filter: WaylandFilter,
 ) -> Vec<Element<'a, Message>> {
@@ -711,23 +711,6 @@ pub fn render_header_start<'a>(
                         .on_input(Message::SearchInput)
                         .on_submit(Message::SearchSubmit)
                         .into(),
-                    widget::dropdown(
-                        search_sort_options,
-                        Some(match search_sort_mode {
-                            SearchSortMode::Relevance => 0,
-                            SearchSortMode::MostDownloads => 1,
-                            SearchSortMode::RecentlyUpdated => 2,
-                            SearchSortMode::BestWaylandSupport => 3,
-                        }),
-                        |index| match index {
-                            0 => Message::SearchSortMode(SearchSortMode::Relevance),
-                            1 => Message::SearchSortMode(SearchSortMode::MostDownloads),
-                            2 => Message::SearchSortMode(SearchSortMode::RecentlyUpdated),
-                            _ => Message::SearchSortMode(SearchSortMode::BestWaylandSupport),
-                        },
-                    )
-                    .width(Length::Fixed(200.0))
-                    .into(),
                     widget::dropdown(
                         wayland_filter_options,
                         Some(match wayland_filter {

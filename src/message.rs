@@ -80,6 +80,8 @@ pub enum Message {
     SearchResults(String, Vec<SearchResult>, bool),
     SearchAugmented(String, Vec<SearchResult>),
     SearchSortMode(SearchSortMode),
+    StoreSource(crate::search::StoreSource),
+    NativeOnly(bool),
     SearchSubmit(String),
     WaylandFilter(WaylandFilter),
     Select(

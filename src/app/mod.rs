@@ -110,6 +110,9 @@ pub struct App {
     pub(crate) search_id: widget::Id,
     pub(crate) search_input: String,
     pub(crate) search_sort_mode: SearchSortMode,
+    pub(crate) store_source: crate::search::StoreSource,
+    pub(crate) store_source_options: Vec<String>,
+    pub(crate) native_only: bool,
     pub(crate) search_sort_options: Vec<String>,
     pub(crate) wayland_filter: WaylandFilter,
     pub(crate) wayland_filter_options: Vec<String>,
@@ -285,6 +288,62 @@ impl App {
             };
             result.icon_opt = Some(appstream_cache.icon(&result.info));
         }
+    }
+
+    pub(crate) fn filter_store_results(&self, results: &mut Vec<SearchResult>) {
+        if !matches!(self.mode, Mode::Normal) {
+            return;
+        }
+        results.retain_mut(|result| {
+            let matches = |backend: &str, info: &AppInfo, installed: bool| {
+                self.store_source.matches(backend)
+                    && (!self.native_only || crate::search::native_linux(backend, info))
+                    && (installed
+                        || backend != "packagekit"
+                        || self
+                            .backends
+                            .get(backend)
+                            .is_some_and(|b| b.is_package_available(&info.pkgnames)))
+            };
+            if let Some(entries) = self.apps.get(&result.id) {
+                if let Some(entry) = entries
+                    .iter()
+                    .find(|e| matches(e.backend_name, &e.info, e.installed))
+                {
+                    if entry.backend_name != result.backend_name()
+                        || entry.info.source_id != result.info.source_id
+                    {
+                        *result = SearchResult::new(
+                            entry.backend_name,
+                            result.id.clone(),
+                            None,
+                            entry.info.clone(),
+                            result.weight,
+                        );
+                    }
+                    return true;
+                }
+                false
+            } else {
+                matches(result.backend_name(), &result.info, false)
+            }
+        });
+        crate::search_logic::sort_results(results, self.search_sort_mode, &self.app_stats);
+    }
+
+    pub(crate) fn refresh_store(&self) -> Task<Message> {
+        let mut tasks = vec![self.explore_results_all_batch()];
+        if let Some(categories) = self
+            .nav_model
+            .active_data::<NavPage>()
+            .and_then(|p| p.categories())
+        {
+            tasks.push(self.categories(categories));
+        }
+        if !self.search_input.is_empty() {
+            tasks.push(self.search());
+        }
+        Task::batch(tasks)
     }
 
     pub(crate) fn search(&self) -> Task<Message> {
@@ -1202,7 +1261,7 @@ impl App {
         let cosmic_theme::Spacing { space_s, .. } = spacing;
         let grid_width = (size.width - 2.0 * space_s as f32).floor().max(0.0) as usize;
 
-        match &self.details_page_opt {
+        let content = match &self.details_page_opt {
             Some(details_page) => details_page.view(self, spacing, grid_width, &self.app_stats),
             None => match &self.search_results {
                 Some((input, results)) => {
@@ -1220,7 +1279,55 @@ impl App {
                     nav_page => self.view_category_page(nav_page, spacing, grid_width),
                 },
             },
+        };
+        let nav = self
+            .nav_model
+            .active_data::<NavPage>()
+            .copied()
+            .unwrap_or_default();
+        if self.details_page_opt.is_some()
+            || (self.search_results.is_none()
+                && matches!(nav, NavPage::Installed | NavPage::Updates))
+        {
+            return content;
         }
+        let controls = widget::column::with_children(vec![
+            widget::dropdown(
+                &self.store_source_options,
+                Some(self.store_source as usize),
+                |i| {
+                    Message::StoreSource(match i {
+                        1 => crate::search::StoreSource::System,
+                        2 => crate::search::StoreSource::Flatpak,
+                        3 => crate::search::StoreSource::Steam,
+                        _ => crate::search::StoreSource::All,
+                    })
+                },
+            )
+            .into(),
+            widget::checkbox(fl!("native-linux-only"), self.native_only)
+                .on_toggle(Message::NativeOnly)
+                .into(),
+            widget::dropdown(
+                &self.search_sort_options,
+                Some(self.search_sort_mode as usize),
+                |i| {
+                    Message::SearchSortMode(match i {
+                        1 => SearchSortMode::MostDownloads,
+                        2 => SearchSortMode::RecentlyUpdated,
+                        3 => SearchSortMode::BestWaylandSupport,
+                        4 => SearchSortMode::Name,
+                        _ => SearchSortMode::Relevance,
+                    })
+                },
+            )
+            .into(),
+        ])
+        .spacing(8)
+        .padding(16);
+        widget::column::with_children(vec![controls.into(), content])
+            .spacing(8)
+            .into()
     }
 }
 
@@ -1266,6 +1373,7 @@ impl Application for App {
             fl!("sort-popular"),
             fl!("sort-recent"),
             fl!("sort-wayland"),
+            fl!("sort-name"),
         ];
         let wayland_filter_options = vec![
             fl!("filter-all"),
@@ -1328,6 +1436,14 @@ impl Application for App {
             search_id: widget::Id::unique(),
             search_input: String::new(),
             search_sort_mode: SearchSortMode::Relevance,
+            store_source: crate::search::StoreSource::All,
+            store_source_options: vec![
+                fl!("source-all"),
+                fl!("system-packages"),
+                "Flatpak".to_string(),
+                "Steam".to_string(),
+            ],
+            native_only: true,
             search_sort_options,
             wayland_filter: WaylandFilter::All,
             wayland_filter_options,

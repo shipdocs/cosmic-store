@@ -757,21 +757,15 @@ pub fn render_header_end<'a>(mode: &Mode) -> Vec<Element<'a, Message>> {
         Mode::Normal => {
             vec![
                 widget::tooltip(
-                    widget::button::icon(widget::icon::icon(icon_cache_handle(
-                        "store-sources-symbolic",
-                        16,
-                    )))
-                    .on_press(Message::ToggleContextPage(ContextPage::Repositories)),
+                    widget::button::icon(icon_cache_handle("store-sources-symbolic", 16))
+                        .on_press(Message::ToggleContextPage(ContextPage::Repositories)),
                     widget::text(fl!("manage-repositories")),
                     widget::tooltip::Position::Bottom,
                 )
                 .into(),
                 widget::tooltip(
-                    widget::button::icon(widget::icon::icon(icon_cache_handle(
-                        "store-settings-symbolic",
-                        16,
-                    )))
-                    .on_press(Message::ToggleContextPage(ContextPage::Settings)),
+                    widget::button::icon(icon_cache_handle("store-settings-symbolic", 16))
+                        .on_press(Message::ToggleContextPage(ContextPage::Settings)),
                     widget::text(fl!("settings")),
                     widget::tooltip::Position::Bottom,
                 )

@@ -1664,6 +1664,8 @@ impl Application for App {
         self.category_results = None;
         self.explore_page_opt = None;
         self.search_active = false;
+        self.search_input.clear();
+        self.search_pending = false;
         self.search_results = None;
         self.details_page_opt = None;
         self.nav_model.activate(id);

@@ -50,3 +50,22 @@ jobs:
       - name: Run tests
         run: cargo test --locked --workspace
 
+      - name: Build application
+        run: cargo build --locked
+
+      - name: Install X11 smoke-test tools
+        run: sudo apt-get install -y xvfb x11-utils imagemagick dbus-x11 mesa-vulkan-drivers libgl1-mesa-dri
+
+      - name: Start store on X11 and capture screenshot
+        env:
+          LANG: en_US.UTF-8
+          WINIT_UNIX_BACKEND: x11
+        run: dbus-run-session -- xvfb-run -a -s '-screen 0 1280x900x24' bash scripts/smoke-x11.sh
+
+      - name: Upload startup evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: store-x11-smoke
+          path: smoke-artifacts/
+          if-no-files-found: ignore

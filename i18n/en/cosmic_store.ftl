@@ -216,3 +216,5 @@ search-steam-loading = Searching Steam… Your local apps are already shown.
 compatibility-estimates = Compatibility estimates
 compatibility-estimates-help = Optional Wayland estimates apply to search results. They are not game or hardware tests. Choose All to include Steam searches.
 wayland-filter = Wayland estimate in search
+
+include-proton-games = Include games requiring Proton

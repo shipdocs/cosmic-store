@@ -156,3 +156,5 @@ search-steam-loading = Steam doorzoeken… Je lokale apps staan er alvast.
 compatibility-estimates = Inschattingen van compatibiliteit
 compatibility-estimates-help = Optionele Wayland-inschattingen gelden voor zoekresultaten. Ze testen geen games of hardware. Kies Alles om ook Steam te doorzoeken.
 wayland-filter = Wayland-inschatting bij zoeken
+
+include-proton-games = Toon ook games die Proton vereisen

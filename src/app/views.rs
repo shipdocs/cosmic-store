@@ -914,6 +914,9 @@ fn empty_catalog<'a>() -> Element<'a, Message> {
             widget::button::suggested(fl!("reset-filters"))
                 .on_press(Message::ResetFilters)
                 .into(),
+            widget::button::standard(fl!("include-proton-games"))
+                .on_press(Message::NativeOnly(false))
+                .into(),
             widget::button::text(fl!("manage-repositories"))
                 .on_press(Message::ToggleContextPage(ContextPage::Repositories))
                 .into(),

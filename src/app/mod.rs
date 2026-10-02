@@ -1011,6 +1011,28 @@ impl App {
                     )),
                 )
                 .into(),
+            widget::settings::section()
+                .title(fl!("compatibility-estimates"))
+                .add(widget::text::body(fl!("compatibility-estimates-help")))
+                .add(
+                    widget::settings::item::builder(fl!("wayland-filter")).control(
+                        widget::dropdown(
+                            &self.wayland_filter_options,
+                            Some(self.wayland_filter as usize),
+                            |i| {
+                                Message::WaylandFilter(match i {
+                                    1 => WaylandFilter::Excellent,
+                                    2 => WaylandFilter::Good,
+                                    3 => WaylandFilter::Caution,
+                                    4 => WaylandFilter::Limited,
+                                    5 => WaylandFilter::Unknown,
+                                    _ => WaylandFilter::All,
+                                })
+                            },
+                        ),
+                    ),
+                )
+                .into(),
         ])
         .into()
     }
@@ -1713,16 +1735,7 @@ impl Application for App {
     }
 
     fn header_start(&self) -> Vec<Element<'_, Message>> {
-        views::render_header_start(
-            &self.mode,
-            self.search_active,
-            &self.search_input,
-            self.search_id.clone(),
-            &self.search_sort_options,
-            self.search_sort_mode,
-            &self.wayland_filter_options,
-            self.wayland_filter,
-        )
+        views::render_header_start(&self.mode, &self.search_input, self.search_id.clone())
     }
 
     fn header_end(&self) -> Vec<Element<'_, Message>> {

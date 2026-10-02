@@ -15,7 +15,7 @@ use crate::icon_cache::icon_cache_handle;
 use crate::message::Message;
 use crate::operation::{Operation, OperationKind};
 use crate::pages::{ContextPage, DialogPage, ExplorePage, NavPage};
-use crate::search::{SearchResult, WaylandFilter};
+use crate::search::SearchResult;
 use crate::source::{Source, SourceKind};
 use crate::ui::{GridMetrics, package_card_view};
 
@@ -732,13 +732,8 @@ pub fn render_footer<'a>(
 #[allow(clippy::too_many_arguments)]
 pub fn render_header_start<'a>(
     mode: &Mode,
-    _search_active: bool,
     search_input: &'a str,
     search_id: widget::Id,
-    _search_sort_options: &'a [String],
-    _search_sort_mode: crate::search::SearchSortMode,
-    _wayland_filter_options: &'a [String],
-    _wayland_filter: WaylandFilter,
 ) -> Vec<Element<'a, Message>> {
     match mode {
         Mode::Normal => vec![
@@ -762,6 +757,13 @@ pub fn render_header_end<'a>(mode: &Mode) -> Vec<Element<'a, Message>> {
                     widget::button::icon(widget::icon::from_name("application-menu-symbolic"))
                         .on_press(Message::ToggleContextPage(ContextPage::Repositories)),
                     widget::text(fl!("manage-repositories")),
+                    widget::tooltip::Position::Bottom,
+                )
+                .into(),
+                widget::tooltip(
+                    widget::button::icon(widget::icon::from_name("preferences-system-symbolic"))
+                        .on_press(Message::ToggleContextPage(ContextPage::Settings)),
+                    widget::text(fl!("settings")),
                     widget::tooltip::Position::Bottom,
                 )
                 .into(),

@@ -212,3 +212,7 @@ steam-ready = Steam is available. It handles ownership and installation.
 search-store = Search apps and games
 
 search-steam-loading = Searching Steam… Your local apps are already shown.
+
+compatibility-estimates = Compatibility estimates
+compatibility-estimates-help = Optional Wayland estimates apply to search results. They are not game or hardware tests. Choose All to include Steam searches.
+wayland-filter = Wayland estimate in search

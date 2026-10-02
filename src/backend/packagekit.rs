@@ -138,10 +138,16 @@ enum TransactionFlag {
 }
 
 #[derive(Debug)]
+enum PackageAvailability {
+    Known(HashSet<String>),
+    Unknown,
+}
+
+#[derive(Debug)]
 pub struct Packagekit {
     connection: Connection,
     appstream_caches: Vec<AppstreamCache>,
-    available_packages_cache: Arc<Mutex<Option<Result<HashSet<String>, ()>>>>,
+    available_packages_cache: Arc<Mutex<Option<PackageAvailability>>>,
 }
 
 impl Packagekit {
@@ -175,18 +181,21 @@ impl Packagekit {
         // Availability needs raw names only, without app cards or icon loading.
         let mut available = HashSet::new();
         for signal in signals {
-            match signal.member().map(|m| m.as_str()) {
-                Some("Package") => {
+            let Some(member) = signal.member() else {
+                continue;
+            };
+            match member.as_str() {
+                "Package" => {
                     let (_, package_id, _) = signal.body::<(u32, String, String)>()?;
                     if let Some(name) = package_id.split(';').next() {
                         available.insert(name.to_string());
                     }
                 }
-                Some("ErrorCode") => {
+                "ErrorCode" => {
                     let (code, details) = signal.body::<(u32, String)>()?;
                     return Err(format!("{details} (code {code})").into());
                 }
-                Some("Finished") => break,
+                "Finished" => break,
                 _ => {}
             }
         }
@@ -205,19 +214,21 @@ impl Packagekit {
         let mut cache = self.available_packages_cache.lock().unwrap();
         if cache.is_none() {
             match self.build_available_packages_cache() {
-                Ok(c) => *cache = Some(Ok(c)),
+                Ok(c) => *cache = Some(PackageAvailability::Known(c)),
                 Err(e) => {
                     log::error!("Failed to build available packages cache: {}", e);
                     // Availability is unknown, not unavailable. Cache the failure so
                     // browsing does not repeat a failed transaction for every app.
-                    *cache = Some(Err(()));
+                    *cache = Some(PackageAvailability::Unknown);
                 }
             }
         }
 
         // Check if any of the package names are available
         match cache.as_ref() {
-            Some(Ok(available)) => pkgnames.iter().any(|name| available.contains(name)),
+            Some(PackageAvailability::Known(available)) => {
+                pkgnames.iter().any(|name| available.contains(name))
+            }
             _ => true,
         }
     }

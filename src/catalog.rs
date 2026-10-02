@@ -20,7 +20,7 @@ fn client() -> Result<reqwest::blocking::Client, reqwest::Error> {
 }
 
 fn cache_path() -> Option<PathBuf> {
-    Some(dirs::cache_dir()?.join("cosmic-store/steam-featured.json"))
+    Some(dirs::cache_dir()?.join("cosmic-store/steam-featured-v2.json"))
 }
 
 pub fn steam_id(info: &AppInfo) -> Option<u64> {
@@ -41,11 +41,131 @@ pub fn install_url(id: u64) -> String {
     format!("steam://install/{id}")
 }
 
+fn software_type(kind: &str) -> bool {
+    matches!(kind, "game" | "dlc" | "demo" | "software")
+}
+
+// Featured/search feeds call hardware an app too. Validate using the product's real type.
+// Cache just the needed facts; expired successful metadata is usable offline.
+fn validated_item(client: &reqwest::blocking::Client, item: &Value) -> Option<Value> {
+    if item
+        .get("type")
+        .is_some_and(|t| t != "app" && t.as_u64() != Some(0))
+    {
+        return None;
+    }
+    let id = item.get("id")?.as_u64()?;
+    if id == 0 {
+        return None;
+    }
+    let path = dirs::cache_dir().map(|p| p.join(format!("cosmic-store/steam-metadata/{id}.json")));
+    let cached = path
+        .as_ref()
+        .and_then(|p| fs::read(p).ok())
+        .and_then(|b| serde_json::from_slice::<Value>(&b).ok());
+    let fresh = path
+        .as_ref()
+        .and_then(|p| fs::metadata(p).ok())
+        .and_then(|m| m.modified().ok())
+        .and_then(|t| t.elapsed().ok())
+        .is_some_and(|age| age < Duration::from_secs(86400));
+    let facts = if fresh {
+        cached
+    } else {
+        let fetched = client.get("https://store.steampowered.com/api/appdetails/")
+            .query(&[("appids", id.to_string()), ("cc", "nl".to_string()), ("l", "english".to_string())])
+            .send().ok().and_then(|r| r.error_for_status().ok()).and_then(|r| r.json::<Value>().ok())
+            .and_then(|v| {
+                let data = v.get(id.to_string())?.get("data")?;
+                Some(serde_json::json!({"type": data.get("type")?, "platforms": data.get("platforms"), "controller_support": data.get("controller_support")}))
+            });
+        if let (Some(facts), Some(path)) = (&fetched, &path) {
+            if let Some(parent) = path.parent() {
+                let _ = fs::create_dir_all(parent);
+            }
+            if let Ok(bytes) = serde_json::to_vec(facts) {
+                let _ = fs::write(path, bytes);
+            }
+        }
+        fetched.or(cached)
+    }?;
+    let kind = facts.get("type")?.as_str()?;
+    if !software_type(kind) {
+        return None;
+    }
+    let mut item = item.clone();
+    item["catalog_type"] = Value::String(kind.to_string());
+    item["platforms"] = facts["platforms"].clone();
+    // Remove the generic featured feed flag in favor of validated platform metadata.
+    if let Some(map) = item.as_object_mut() {
+        map.remove("linux_available");
+    }
+    item["controller_support"] = facts["controller_support"].clone();
+    Some(item)
+}
+
+fn validate_items(items: Vec<Value>) -> Vec<Value> {
+    let Ok(client) = client() else {
+        return Vec::new();
+    };
+    let Ok(pool) = rayon::ThreadPoolBuilder::new().num_threads(6).build() else {
+        return Vec::new();
+    };
+    pool.install(|| {
+        items
+            .par_iter()
+            .filter_map(|item| validated_item(&client, item))
+            .collect()
+    })
+}
+
+fn validate_featured(mut value: Value) -> Value {
+    let mut items = Vec::new();
+    let mut ids = HashSet::new();
+    for section in ["top_sellers", "new_releases", "specials"] {
+        if let Some(feed) = value
+            .pointer(&format!("/{section}/items"))
+            .and_then(Value::as_array)
+        {
+            for item in feed.iter().take(16) {
+                if let Some(id) = item.get("id").and_then(Value::as_u64) {
+                    if ids.insert(id) {
+                        items.push(item.clone());
+                    }
+                }
+            }
+        }
+    }
+    let verified: std::collections::HashMap<_, _> = validate_items(items)
+        .into_iter()
+        .filter_map(|v| Some((v.get("id")?.as_u64()?, v)))
+        .collect();
+    for section in ["top_sellers", "new_releases", "specials"] {
+        if let Some(feed) = value
+            .pointer_mut(&format!("/{section}/items"))
+            .and_then(Value::as_array_mut)
+        {
+            *feed = feed
+                .iter()
+                .filter_map(|item| verified.get(&item.get("id")?.as_u64()?).cloned())
+                .collect();
+        }
+    }
+    value
+}
+
 fn item_info(item: &Value, new_release: bool) -> Option<(AppId, Arc<AppInfo>)> {
     // Featured feeds also contain bundles and packages; those IDs are not app IDs.
     if item
         .get("type")
         .is_some_and(|t| t != "app" && t.as_u64() != Some(0))
+    {
+        return None;
+    }
+    if item
+        .get("catalog_type")
+        .and_then(Value::as_str)
+        .is_some_and(|kind| !software_type(kind))
     {
         return None;
     }
@@ -105,7 +225,14 @@ fn item_info(item: &Value, new_release: bool) -> Option<(AppId, Arc<AppInfo>)> {
             }]
         })
         .unwrap_or_default();
-    let mut categories = vec!["Game".to_string()];
+    let mut categories = vec![
+        if item.get("catalog_type").and_then(Value::as_str) == Some("software") {
+            "Utility"
+        } else {
+            "Game"
+        }
+        .to_string(),
+    ];
     if linux {
         categories.push(NATIVE_LINUX.to_string());
     }
@@ -134,7 +261,7 @@ fn parse_featured(value: &Value) -> Apps {
             .pointer(&format!("/{section}/items"))
             .and_then(Value::as_array)
         {
-            for item in items.iter().take(12) {
+            for item in items.iter().take(16) {
                 if let Some((id, info)) = item_info(item, section == "new_releases") {
                     let entries = apps.entry(id).or_default();
                     if entries.is_empty() || section == "new_releases" {
@@ -167,7 +294,9 @@ pub fn featured() -> Apps {
                 .ok()
         })
         .and_then(|r| r.error_for_status().ok())
-        .and_then(|r| r.json::<Value>().ok());
+        .and_then(|r| r.json::<Value>().ok())
+        .map(validate_featured)
+        .filter(|v| !parse_featured(v).is_empty());
     if let (Some(value), Some(path)) = (&value, cache_path()) {
         if let Some(parent) = path.parent() {
             let _ = fs::create_dir_all(parent);
@@ -201,12 +330,13 @@ pub fn search(term: &str) -> Result<Vec<SearchResult>, Box<dyn Error>> {
         .error_for_status()?
         .json::<Value>()?;
     let mut ids = HashSet::new();
-    Ok(value
+    let items = value
         .get("items")
         .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .take(30)
+        .map(|items| items.iter().take(30).cloned().collect())
+        .unwrap_or_default();
+    Ok(validate_items(items)
+        .iter()
         .filter_map(|item| item_info(item, false))
         .filter(|(id, _)| ids.insert(id.clone()))
         .map(|(id, info)| SearchResult::new(STEAM, id, None, info, 0))
@@ -289,5 +419,19 @@ pub fn alternatives(input: &str) -> &'static [&'static str] {
         "premiere" | "adobe premiere" => &["Kdenlive", "Shotcut"],
         "microsoft office" | "office" => &["LibreOffice", "ONLYOFFICE"],
         _ => &[],
+    }
+}
+
+#[cfg(test)]
+mod product_type_tests {
+    use super::*;
+    #[test]
+    fn hardware_and_video_are_not_installable_software() {
+        for kind in ["hardware", "video", "music", "series"] {
+            assert!(!software_type(kind));
+            assert!(item_info(&serde_json::json!({"id":42,"name":"Product","type":0,"catalog_type":kind,"linux_available":true}), false).is_none());
+        }
+        assert!(software_type("game"));
+        assert!(software_type("software"));
     }
 }

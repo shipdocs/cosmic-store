@@ -11,6 +11,7 @@ Combining system packages and Flatpak alone is therefore not a differentiator. A
 
 ## What this implementation adds
 
+- Validated Steam product types exclude hardware/video that storefront feeds also call apps.
 - Current Steam games and live storefront searches beside configured system/Flatpak applications, with explicit install, purchase and compatibility handoffs.
 - One source filter and shared sorting for browsing, categories and search. An All apps page covers the loaded catalogs; Steam's complete catalog is accessible through live search rather than fully indexed locally.
 - Native Linux filtering enabled by default; Windows games can be included deliberately. Steam discovery is currently limited to x86_64 hosts, matching the supported Linux client target. Native availability is not a hardware guarantee.

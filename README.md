@@ -128,3 +128,5 @@ Native Linux only is enabled by default. It hides Steam titles unless Steam expl
 The user-facing product name is **Kompas**, a working name rather than a cleared trademark. The executable and application ID remain `cosmic-store` / `com.system76.CosmicStore` for upgrade compatibility.
 
 Malformed YAML components are skipped individually so one duplicate translation key cannot discard an entire system repository; invalid repository headers still fail. Existing AppStream caches are rebuilt once for this parser revision.
+
+Steam discovery validates product types through cached app-details metadata before publishing items. Hardware and video products are excluded even when storefront search calls them apps. Product facts are cached for a day, with previously validated metadata as an offline fallback. First-time remote results may arrive later because this requires additional background requests; local results remain available immediately.

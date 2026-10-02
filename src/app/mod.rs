@@ -309,17 +309,21 @@ impl App {
         if selected_backend_name == crate::catalog::STEAM {
             if let Some(id) = crate::catalog::steam_id(selected_info) {
                 return vec![
-                    widget::button::suggested(fl!("steam-install"))
-                        .on_press(Message::LaunchUrl(crate::catalog::install_url(id)))
-                        .into(),
-                    widget::button::standard(fl!("steam-store"))
-                        .on_press(Message::LaunchUrl(crate::catalog::store_url(id)))
-                        .into(),
-                    widget::button::standard(fl!("steam-compatibility"))
-                        .on_press(Message::LaunchUrl(format!(
-                            "https://www.protondb.com/app/{id}"
-                        )))
-                        .into(),
+                    widget::column::with_children(vec![
+                        widget::button::suggested(fl!("steam-install"))
+                            .on_press(Message::LaunchUrl(crate::catalog::install_url(id)))
+                            .into(),
+                        widget::button::standard(fl!("steam-store"))
+                            .on_press(Message::LaunchUrl(crate::catalog::store_url(id)))
+                            .into(),
+                        widget::button::standard(fl!("steam-compatibility"))
+                            .on_press(Message::LaunchUrl(format!(
+                                "https://www.protondb.com/app/{id}"
+                            )))
+                            .into(),
+                    ])
+                    .spacing(8)
+                    .into(),
                 ];
             }
         }

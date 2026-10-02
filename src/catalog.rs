@@ -222,18 +222,28 @@ pub fn cache_images(apps: &Apps) {
         let Some(image) = info.screenshots.first() else {
             return;
         };
-        if let Ok(c) = client() {
-            if let Ok(response) = c.get(&image.url).send().and_then(|r| r.error_for_status()) {
-                if let Ok(bytes) = response.bytes() {
-                    if bytes.len() <= 5 * 1024 * 1024 {
-                        if let Some(parent) = path.parent() {
-                            let _ = fs::create_dir_all(parent);
-                        }
-                        let _ = fs::write(path, bytes);
-                    }
-                }
-            }
+        let Ok(c) = client() else {
+            return;
+        };
+        let Ok(response) = c.get(&image.url).send().and_then(|r| r.error_for_status()) else {
+            return;
+        };
+        if response
+            .content_length()
+            .is_some_and(|size| size > 5 * 1024 * 1024)
+        {
+            return;
         }
+        let Ok(bytes) = response.bytes() else {
+            return;
+        };
+        if bytes.len() > 5 * 1024 * 1024 {
+            return;
+        }
+        if let Some(parent) = path.parent() {
+            let _ = fs::create_dir_all(parent);
+        }
+        let _ = fs::write(path, bytes);
     });
 }
 

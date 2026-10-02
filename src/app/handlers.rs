@@ -95,6 +95,16 @@ pub fn handle_search_message(app: &mut App, message: Message) -> Task<Message> {
                 Task::none()
             }
         }
+        Message::SearchAugmented(input, mut results) => {
+            if input == app.search_input {
+                app.load_icons_for_results(&mut results);
+                app.search_results = Some((input, results));
+                if app.details_page_opt.is_none() {
+                    return app.update_scroll();
+                }
+            }
+            Task::none()
+        }
         Message::SearchResults(input, mut results, auto_select) => {
             if input == app.search_input {
                 app.load_icons_for_results(&mut results);
@@ -567,6 +577,7 @@ pub fn update(app: &mut App, message: Message) -> Task<Message> {
         | Message::SearchClear
         | Message::SearchInput(_)
         | Message::SearchResults(..)
+        | Message::SearchAugmented(..)
         | Message::SearchSortMode(_)
         | Message::SearchSubmit(_)
         | Message::WaylandFilter(_) => {

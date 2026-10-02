@@ -128,8 +128,11 @@ impl SearchResult {
             .any(|choice_id| choice_id == &self.id.normalized());
         let is_verified = self.info.verified;
 
-        // Always show a compatibility badge - every app gets a status indicator
-        let compat_badge = wayland_compat_badge(&self.info, 16, app_stats);
+        let compat_badge = if self.info.source_id == "flathub" {
+            wayland_compat_badge(&self.info, 16, app_stats)
+        } else {
+            None
+        };
 
         let mut name_row = vec![];
         name_row.push(
@@ -143,7 +146,7 @@ impl SearchResult {
         }
 
         if self.backend_name == crate::catalog::STEAM {
-            let mut card = widget::column::new().spacing(spacing.space_xxs);
+            let mut card = widget::column::with_capacity(4).spacing(spacing.space_xxs);
             if let Some(path) = crate::catalog::image_path(&self.info).filter(|p| p.is_file()) {
                 card = card.push(
                     widget::image(widget::image::Handle::from_path(path))
@@ -173,7 +176,7 @@ impl SearchResult {
             .into();
         }
         widget::container(
-            widget::row::with_children(vec![
+            widget::column::with_children(vec![
                 match &self.icon_opt {
                     Some(icon) => styled_icon(icon.clone(), ICON_SIZE_SEARCH),
                     None => {
@@ -233,7 +236,7 @@ impl SearchResult {
         )
         .align_y(Alignment::Center)
         .width(Length::Fixed(width as f32))
-        .height(Length::Fixed(64.0 + (spacing.space_xxs as f32) * 2.0))
+        .height(Length::Fixed(224.0))
         .padding([spacing.space_xxs, spacing.space_s])
         .class(theme::Container::Card)
         .into()

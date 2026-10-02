@@ -263,9 +263,7 @@ pub fn search_task(
             let mut ids: std::collections::HashSet<_> =
                 combined.iter().map(|r| r.id.clone()).collect();
             combined.extend(external.into_iter().filter(|r| ids.insert(r.id.clone())));
-            let _ = output
-                .send(Message::SearchResults(input, combined, false))
-                .await;
+            let _ = output.send(Message::SearchAugmented(input, combined)).await;
         }),
         action::app,
     )

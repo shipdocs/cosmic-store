@@ -78,6 +78,7 @@ pub enum Message {
     SearchClear,
     SearchInput(String),
     SearchResults(String, Vec<SearchResult>, bool),
+    SearchAugmented(String, Vec<SearchResult>),
     SearchSortMode(SearchSortMode),
     SearchSubmit(String),
     WaylandFilter(WaylandFilter),

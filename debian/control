@@ -9,6 +9,7 @@ Build-Depends:
     libflatpak-dev,
     libssl-dev,
     libxkbcommon-dev,
+    libxkbcommon-x11-dev,
     libwayland-dev,
     libfontconfig1-dev,
     libegl1-mesa-dev,
@@ -20,6 +21,7 @@ Homepage: https://github.com/shipdocs/cosmic-store
 Package: cosmic-store
 Architecture: amd64 arm64
 Depends:
+    libxkbcommon-x11-0,
     apt-config-icons,
     apt-config-icons-hidpi,
     apt-config-icons-large,

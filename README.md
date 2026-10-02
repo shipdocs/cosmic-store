@@ -26,7 +26,7 @@ Install the native build dependencies:
 ```bash
 sudo apt update
 sudo apt install build-essential git pkg-config libflatpak-dev libssl-dev \
-    libxkbcommon-dev libwayland-dev libfontconfig1-dev libegl1-mesa-dev
+    libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev libfontconfig1-dev libegl1-mesa-dev
 ```
 
 Clone and build the development branch without changing the lockfile:

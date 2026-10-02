@@ -31,11 +31,11 @@ test -s "$output/store-x11.png"
 # Browse the unified catalog, using the stable second navigation entry.
 xdotool mousemove --window "$window_id" 90 112 click 1
 for attempt in $(seq 1 60); do
-    if rg -q 'searched for categories \[\].*found [1-9][0-9]* results' "$output/startup.log"; then break; fi
+    if grep -Eq 'searched for categories \[\].*found [1-9][0-9]* results' "$output/startup.log"; then break; fi
     kill -0 "$app_pid"
     sleep 1
 done
-rg -q 'searched for categories \[\].*found [1-9][0-9]* results' "$output/startup.log"
+grep -Eq 'searched for categories \[\].*found [1-9][0-9]* results' "$output/startup.log"
 sleep 2
 kill -0 "$app_pid"
 import -window "$window_id" "$output/all-apps-native.png"

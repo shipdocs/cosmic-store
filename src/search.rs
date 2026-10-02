@@ -231,7 +231,7 @@ impl SearchResult {
                 ])
                 .into(),
             ])
-            .align_y(Alignment::Center)
+            .align_x(Alignment::Start)
             .spacing(spacing.space_s),
         )
         .align_y(Alignment::Center)

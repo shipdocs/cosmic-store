@@ -46,6 +46,13 @@ impl IconCache {
         bundle!("store-utilities-symbolic", 16);
         bundle!("store-work-symbolic", 16);
 
+        cache.insert(
+            IconCacheKey {
+                name: "com.system76.CosmicStore",
+                size: 128,
+            },
+            icon::from_svg_bytes(include_bytes!("../res/icons/kompas.svg")),
+        );
         Self { cache }
     }
 

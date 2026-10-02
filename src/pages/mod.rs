@@ -196,3 +196,11 @@ impl ExplorePage {
         }
     }
 }
+
+/// Keep desktop-specific discovery out of other desktop environments.
+pub fn cosmic_desktop() -> bool {
+    std::env::var("XDG_CURRENT_DESKTOP")
+        .unwrap_or_default()
+        .split(':')
+        .any(|desktop| desktop.eq_ignore_ascii_case("cosmic"))
+}

@@ -113,6 +113,7 @@ pub struct App {
     pub(crate) store_source: crate::search::StoreSource,
     pub(crate) store_source_options: Vec<String>,
     pub(crate) native_only: bool,
+    pub(crate) results_limit: usize,
     pub(crate) search_sort_options: Vec<String>,
     pub(crate) wayland_filter: WaylandFilter,
     pub(crate) wayland_filter_options: Vec<String>,
@@ -367,11 +368,42 @@ impl App {
     ) -> Vec<Element<'_, Message>> {
         if selected_backend_name == crate::catalog::STEAM {
             if let Some(id) = crate::catalog::steam_id(selected_info) {
+                let installed = self.installed.as_ref().is_some_and(|packages| {
+                    packages.iter().any(|(_, package)| {
+                        package
+                            .info
+                            .pkgnames
+                            .iter()
+                            .any(|name| name == "steam" || name == "steam-installer")
+                            || package.info.desktop_ids.iter().any(|name| {
+                                matches!(
+                                    name.as_str(),
+                                    "steam.desktop" | "com.valvesoftware.Steam.desktop"
+                                )
+                            })
+                            || package.id.normalized() == "com.valvesoftware.Steam"
+                    })
+                }) || crate::catalog::steam_desktop_available();
+                let action = if installed {
+                    Message::LaunchUrl(crate::catalog::install_url(id))
+                } else {
+                    Message::FindApp("Steam".into())
+                };
                 return vec![
                     widget::column::with_children(vec![
-                        widget::button::suggested(fl!("steam-install"))
-                            .on_press(Message::LaunchUrl(crate::catalog::install_url(id)))
-                            .into(),
+                        widget::text::caption(if installed {
+                            fl!("steam-ready")
+                        } else {
+                            fl!("steam-required")
+                        })
+                        .into(),
+                        widget::button::suggested(if installed {
+                            fl!("steam-install")
+                        } else {
+                            fl!("steam-get-client")
+                        })
+                        .on_press(action)
+                        .into(),
                         widget::button::standard(fl!("steam-store"))
                             .on_press(Message::LaunchUrl(crate::catalog::store_url(id)))
                             .into(),
@@ -517,7 +549,15 @@ impl App {
                     installed,
                 } in infos.iter()
                 {
-                    sources.push(SelectedSource::new(backend_name, info, *installed));
+                    if *installed
+                        || *backend_name != "packagekit"
+                        || self
+                            .backends
+                            .get(backend_name)
+                            .is_some_and(|backend| backend.is_package_available(&info.pkgnames))
+                    {
+                        sources.push(SelectedSource::new(backend_name, info, *installed));
+                    }
                 }
             }
             None => {
@@ -1190,7 +1230,14 @@ impl App {
         spacing: cosmic_theme::Spacing,
         grid_width: usize,
     ) -> Element<'a, Message> {
-        views::render_search_results(input, results, spacing, grid_width, &self.app_stats)
+        views::render_search_results(
+            input,
+            results,
+            self.results_limit,
+            spacing,
+            grid_width,
+            &self.app_stats,
+        )
     }
 
     fn view_explore_page<'a>(
@@ -1203,6 +1250,7 @@ impl App {
             &self.explore_page_opt,
             &self.explore_results,
             self.loading_frame,
+            self.results_limit,
             spacing,
             grid_width,
             viewport_height,
@@ -1249,6 +1297,7 @@ impl App {
             nav_page,
             &self.category_results,
             &self.sources(),
+            self.results_limit,
             spacing,
             grid_width,
             &self.app_stats,
@@ -1291,7 +1340,8 @@ impl App {
         {
             return content;
         }
-        let controls = widget::column::with_children(vec![
+        let source = widget::column::with_children(vec![
+            widget::text::caption(fl!("filter-source")).into(),
             widget::dropdown(
                 &self.store_source_options,
                 Some(self.store_source as usize),
@@ -1305,9 +1355,10 @@ impl App {
                 },
             )
             .into(),
-            widget::checkbox(fl!("native-linux-only"), self.native_only)
-                .on_toggle(Message::NativeOnly)
-                .into(),
+        ])
+        .spacing(4);
+        let sort = widget::column::with_children(vec![
+            widget::text::caption(fl!("filter-sort")).into(),
             widget::dropdown(
                 &self.search_sort_options,
                 Some(self.search_sort_mode as usize),
@@ -1323,8 +1374,36 @@ impl App {
             )
             .into(),
         ])
-        .spacing(8)
-        .padding(16);
+        .spacing(4);
+        let filters: Element<_> = if size.width >= 600.0 {
+            widget::row::with_children(vec![source.into(), sort.into()])
+                .spacing(24)
+                .into()
+        } else {
+            widget::column::with_children(vec![source.into(), sort.into()])
+                .spacing(12)
+                .into()
+        };
+        let compatibility = widget::tooltip(
+            widget::checkbox(fl!("native-linux-only"), self.native_only)
+                .on_toggle(Message::NativeOnly),
+            widget::text::body(fl!("native-linux-help")),
+            widget::tooltip::Position::Bottom,
+        );
+        let controls = widget::column::with_children(vec![
+            filters,
+            widget::row::with_children(vec![
+                compatibility.into(),
+                widget::horizontal_space().into(),
+                widget::button::text(fl!("reset-filters"))
+                    .on_press(Message::ResetFilters)
+                    .into(),
+            ])
+            .align_y(cosmic::iced::Alignment::Center)
+            .into(),
+        ])
+        .spacing(12)
+        .padding([12, 16]);
         widget::column::with_children(vec![controls.into(), content])
             .spacing(8)
             .into()
@@ -1386,6 +1465,9 @@ impl Application for App {
 
         let mut nav_model = widget::nav_bar::Model::default();
         for &nav_page in NavPage::all() {
+            if nav_page == NavPage::Applets && !crate::pages::cosmic_desktop() {
+                continue;
+            }
             let id = nav_model
                 .insert()
                 .icon(nav_page.icon())
@@ -1444,6 +1526,7 @@ impl Application for App {
                 "Steam".to_string(),
             ],
             native_only: true,
+            results_limit: crate::constants::MAX_RESULTS,
             search_sort_options,
             wayland_filter: WaylandFilter::All,
             wayland_filter_options,
@@ -1540,6 +1623,7 @@ impl Application for App {
     }
 
     fn on_nav_select(&mut self, id: widget::nav_bar::Id) -> Task<Message> {
+        self.results_limit = crate::constants::MAX_RESULTS;
         self.category_results = None;
         self.explore_page_opt = None;
         self.search_active = false;

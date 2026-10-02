@@ -435,3 +435,26 @@ mod product_type_tests {
         assert!(software_type("software"));
     }
 }
+
+/// Desktop launchers cover both system and Flatpak installations without running commands.
+pub fn steam_desktop_available() -> bool {
+    let mut data_dirs = vec![
+        PathBuf::from("/usr/share"),
+        PathBuf::from("/usr/local/share"),
+    ];
+    if let Some(home) = dirs::data_dir() {
+        data_dirs.push(home);
+    }
+    if let Some(home) = dirs::home_dir() {
+        data_dirs.push(home.join(".local/share/flatpak/exports/share"));
+    }
+    data_dirs.push(PathBuf::from("/var/lib/flatpak/exports/share"));
+    if let Some(paths) = std::env::var_os("XDG_DATA_DIRS") {
+        data_dirs.extend(std::env::split_paths(&paths));
+    }
+    data_dirs.iter().any(|dir| {
+        ["steam.desktop", "com.valvesoftware.Steam.desktop"]
+            .iter()
+            .any(|name| dir.join("applications").join(name).is_file())
+    })
+}

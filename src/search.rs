@@ -167,7 +167,7 @@ impl SearchResult {
         let mut name_row = vec![];
         name_row.push(
             widget::text::body(&self.info.name)
-                .height(Length::Fixed(20.0))
+                .height(Length::Fixed(40.0))
                 .into(),
         );
 
@@ -207,18 +207,24 @@ impl SearchResult {
         }
         widget::container(
             widget::column::with_children(vec![
-                match &self.icon_opt {
-                    Some(icon) => styled_icon(icon.clone(), ICON_SIZE_SEARCH),
-                    None => {
-                        widget::Space::with_width(Length::Fixed(ICON_SIZE_SEARCH as f32)).into()
-                    }
-                },
-                widget::column::with_children(vec![
+                widget::row::with_children(vec![
+                    match &self.icon_opt {
+                        Some(icon) => styled_icon(icon.clone(), ICON_SIZE_SEARCH),
+                        None => {
+                            widget::Space::with_width(Length::Fixed(ICON_SIZE_SEARCH as f32)).into()
+                        }
+                    },
                     widget::row::with_children(name_row)
                         .spacing(spacing.space_xxs)
+                        .width(Length::Fill)
                         .into(),
+                ])
+                .spacing(spacing.space_s)
+                .align_y(Alignment::Center)
+                .into(),
+                widget::column::with_children(vec![
                     widget::text::caption(&self.info.summary)
-                        .height(Length::Fixed(28.0))
+                        .height(Length::Fixed(40.0))
                         .into(),
                     widget::row::with_children(vec![
                         widget::text::caption(&self.info.source_name).into(),
@@ -259,6 +265,7 @@ impl SearchResult {
                     .align_y(Alignment::Center)
                     .into(),
                 ])
+                .spacing(spacing.space_s)
                 .into(),
             ])
             .align_x(Alignment::Start)
@@ -266,8 +273,8 @@ impl SearchResult {
         )
         .align_y(Alignment::Center)
         .width(Length::Fixed(width as f32))
-        .height(Length::Fixed(224.0))
-        .padding([spacing.space_xxs, spacing.space_s])
+        .height(Length::Fixed(176.0))
+        .padding(spacing.space_s)
         .class(theme::Container::Card)
         .into()
     }

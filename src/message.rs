@@ -82,6 +82,9 @@ pub enum Message {
     SearchSortMode(SearchSortMode),
     StoreSource(crate::search::StoreSource),
     NativeOnly(bool),
+    ResetFilters,
+    ShowMore,
+    FindApp(String),
     SearchSubmit(String),
     WaylandFilter(WaylandFilter),
     Select(

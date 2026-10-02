@@ -84,13 +84,38 @@ pub fn handle_search_message(app: &mut App, message: Message) -> Task<Message> {
                 Task::none()
             }
         }
+        Message::FindApp(input) => {
+            app.details_page_opt = None;
+            app.search_active = true;
+            app.store_source = crate::search::StoreSource::All;
+            app.native_only = true;
+            app.search_input = input;
+            app.results_limit = crate::constants::MAX_RESULTS;
+            app.search()
+        }
+        Message::ShowMore => {
+            app.results_limit = app
+                .results_limit
+                .saturating_add(crate::constants::MAX_RESULTS);
+            Task::none()
+        }
+        Message::ResetFilters => {
+            app.store_source = crate::search::StoreSource::All;
+            app.native_only = true;
+            app.search_sort_mode = crate::search::SearchSortMode::Relevance;
+            app.wayland_filter = crate::search::WaylandFilter::All;
+            app.results_limit = crate::constants::MAX_RESULTS;
+            app.refresh_store()
+        }
         Message::SearchInput(input) => {
             if input != app.search_input {
+                app.results_limit = crate::constants::MAX_RESULTS;
                 app.search_input = input;
                 if !app.search_input.is_empty() {
                     app.search()
                 } else {
-                    Task::none()
+                    app.search_results = None;
+                    app.update_scroll()
                 }
             } else {
                 Task::none()
@@ -185,14 +210,17 @@ pub fn handle_search_message(app: &mut App, message: Message) -> Task<Message> {
             }
         }
         Message::SearchSortMode(sort_mode) => {
+            app.results_limit = crate::constants::MAX_RESULTS;
             app.search_sort_mode = sort_mode;
             app.refresh_store()
         }
         Message::StoreSource(source) => {
+            app.results_limit = crate::constants::MAX_RESULTS;
             app.store_source = source;
             app.refresh_store()
         }
         Message::NativeOnly(value) => {
+            app.results_limit = crate::constants::MAX_RESULTS;
             app.native_only = value;
             app.refresh_store()
         }
@@ -587,6 +615,9 @@ pub fn update(app: &mut App, message: Message) -> Task<Message> {
         | Message::SearchAugmented(..)
         | Message::StoreSource(_)
         | Message::NativeOnly(_)
+        | Message::ResetFilters
+        | Message::ShowMore
+        | Message::FindApp(_)
         | Message::SearchSortMode(_)
         | Message::SearchSubmit(_)
         | Message::WaylandFilter(_) => {

@@ -132,7 +132,7 @@ fn parse_featured(value: &Value) -> Apps {
         {
             for item in items.iter().take(12) {
                 if let Some((id, info)) = item_info(item, section == "new_releases") {
-                    let entries = apps.entry(id).or_insert_with(Vec::new);
+                    let entries = apps.entry(id).or_default();
                     if entries.is_empty() || section == "new_releases" {
                         *entries = vec![AppEntry {
                             backend_name: STEAM,

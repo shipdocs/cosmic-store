@@ -32,7 +32,7 @@ pub fn generic_search<
         crate::app_id::AppId,
         (u64, Option<WaylandCompatibility>),
     >,
-    os_codename: &str,
+    _os_codename: &str,
     filter_map: F,
     sort_mode: SearchSortMode,
     wayland_filter: WaylandFilter,
@@ -53,22 +53,8 @@ pub fn generic_search<
                 installed,
             } in infos.iter()
             {
-                let is_flatpak = backend_name.starts_with("flatpak-");
-
-                if !is_flatpak {
-                    if let Some(origin) = &info.origin_opt {
-                        if !origin.is_empty() && !origin.contains(os_codename) {
-                            /*
-                            log::debug!(
-                                "Filtering out {} due to origin mismatch: {} (expected {})",
-                                info.name,
-                                origin,
-                                os_codename
-                            );
-                            */
-                            continue;
-                        }
-                    }
+                if !entry_available(backend_name, info, *installed, _backends) {
+                    continue;
                 }
 
                 if let Some(weight) =
@@ -89,7 +75,9 @@ pub fn generic_search<
                 backend_name,
                 info,
                 installed: _,
-            } = infos.first()?;
+            } = infos.iter().find(|entry| {
+                entry_available(entry.backend_name, &entry.info, entry.installed, _backends)
+            })?;
 
             if wayland_filter != WaylandFilter::All {
                 let compat_opt = stats_compat.or_else(|| info.wayland_compat_lazy());
@@ -125,7 +113,25 @@ pub fn generic_search<
         })
         .collect();
 
+    sort_results(&mut results, sort_mode, app_stats);
+
+    // Icons are now loaded lazily in the view layer to avoid expensive I/O during search
+    log::warn!("Search algorithm took {:?}", search_start.elapsed());
+    results
+}
+
+pub fn sort_results(
+    results: &mut [SearchResult],
+    sort_mode: SearchSortMode,
+    app_stats: &std::collections::HashMap<
+        crate::app_id::AppId,
+        (u64, Option<WaylandCompatibility>),
+    >,
+) {
     match sort_mode {
+        SearchSortMode::Name => {
+            results.par_sort_unstable_by(|a, b| LANGUAGE_SORTER.compare(&a.info.name, &b.info.name))
+        }
         SearchSortMode::Relevance => {
             results.par_sort_unstable_by(|a, b| match a.weight.cmp(&b.weight) {
                 cmp::Ordering::Equal => match LANGUAGE_SORTER.compare(&a.info.name, &b.info.name) {
@@ -210,10 +216,6 @@ pub fn generic_search<
             });
         }
     }
-
-    // Icons are now loaded lazily in the view layer to avoid expensive I/O during search
-    log::warn!("Search algorithm took {:?}", search_start.elapsed());
-    results
 }
 
 /// Extracted search logic
@@ -288,6 +290,12 @@ pub fn search_results(
             if let Some(weight) = regex_weight(&info.description, 6) {
                 return Some(weight);
             }
+            if crate::catalog::alternatives(input)
+                .iter()
+                .any(|name| info.name.eq_ignore_ascii_case(name))
+            {
+                return Some(stats_weight(9));
+            }
             None
         },
         sort_mode,
@@ -321,6 +329,9 @@ pub fn categories_results(
                 return None;
             }
             let downloads = stats_downloads.unwrap_or(info.monthly_downloads);
+            if categories.is_empty() {
+                return Some(-(downloads as i64));
+            }
             for category in categories {
                 //TODO: this hack makes it easier to add applets to the nav bar
                 if matches!(category, Category::CosmicApplet) {
@@ -424,12 +435,14 @@ pub fn explore_results_data(
             app_stats,
             os_codename,
             |_id,
-             _info,
+             info,
              _installed,
              _stats_downloads: Option<u64>,
              _stats_compat: Option<WaylandCompatibility>| {
-                //TODO
-                None
+                info.categories
+                    .iter()
+                    .any(|c| c == crate::catalog::NEW_RELEASE)
+                    .then_some(0)
             },
             SearchSortMode::Relevance,
             WaylandFilter::All,
@@ -564,10 +577,11 @@ fn calculate_explore_weight(
                 None
             }
         }
-        ExplorePage::NewApps => {
-            //TODO
-            None
-        }
+        ExplorePage::NewApps => info
+            .categories
+            .iter()
+            .any(|c| c == crate::catalog::NEW_RELEASE)
+            .then_some(0),
         ExplorePage::RecentlyUpdated => {
             if !matches!(info.kind, AppKind::DesktopApplication) {
                 return None;
@@ -616,7 +630,7 @@ pub fn explore_results_all(
         crate::app_id::AppId,
         (u64, Option<WaylandCompatibility>),
     >,
-    os_codename: &str,
+    _os_codename: &str,
     now: i64,
 ) -> std::collections::HashMap<ExplorePage, Vec<SearchResult>> {
     use std::collections::HashMap;
@@ -636,20 +650,16 @@ pub fn explore_results_all(
         let Some(AppEntry {
             backend_name,
             info,
-            installed: _,
-        }) = infos.first()
+            installed,
+        }) = infos.iter().find(|entry| {
+            entry_available(entry.backend_name, &entry.info, entry.installed, _backends)
+        })
         else {
             continue;
         };
 
-        // Check origin filter for non-flatpak apps
-        let is_flatpak = backend_name.starts_with("flatpak-");
-        if !is_flatpak {
-            if let Some(origin) = &info.origin_opt {
-                if !origin.is_empty() && !origin.contains(os_codename) {
-                    continue;
-                }
-            }
+        if !entry_available(backend_name, info, *installed, _backends) {
+            continue;
         }
 
         let downloads = stats_downloads.unwrap_or(info.monthly_downloads);
@@ -712,6 +722,119 @@ mod tests {
         apps
     }
 
+    #[derive(Debug)]
+    struct UnavailableSystemBackend;
+
+    impl crate::backend::Backend for UnavailableSystemBackend {
+        fn load_caches(&mut self, _: bool) -> Result<(), Box<dyn std::error::Error>> {
+            Ok(())
+        }
+        fn info_caches(&self) -> &[crate::AppstreamCache] {
+            &[]
+        }
+        fn installed(&self) -> Result<Vec<crate::backend::Package>, Box<dyn std::error::Error>> {
+            Ok(Vec::new())
+        }
+        fn updates(&self) -> Result<Vec<crate::backend::Package>, Box<dyn std::error::Error>> {
+            Ok(Vec::new())
+        }
+        fn file_packages(
+            &self,
+            _: &str,
+        ) -> Result<Vec<crate::backend::Package>, Box<dyn std::error::Error>> {
+            Ok(Vec::new())
+        }
+        fn operation(
+            &self,
+            _: &crate::Operation,
+            _: Box<dyn FnMut(f32) + 'static>,
+        ) -> Result<(), Box<dyn std::error::Error>> {
+            Ok(())
+        }
+        fn is_package_available(&self, _: &[String]) -> bool {
+            false
+        }
+    }
+
+    #[test]
+    fn unavailable_system_source_falls_back_to_available_flatpak() {
+        let info = Arc::new(AppInfo {
+            name: "Example".to_string(),
+            pkgnames: vec!["example".to_string()],
+            origin_opt: Some("zorin".to_string()),
+            ..AppInfo::default()
+        });
+        let id = AppId::new("org.example.App");
+        let mut apps = Apps::new();
+        apps.insert(
+            id.clone(),
+            vec![
+                AppEntry {
+                    backend_name: "packagekit",
+                    info: info.clone(),
+                    installed: false,
+                },
+                AppEntry {
+                    backend_name: "flatpak-system",
+                    info,
+                    installed: false,
+                },
+            ],
+        );
+        let mut backends = Backends::new();
+        backends.insert("packagekit", Arc::new(UnavailableSystemBackend));
+        let results = search_results(
+            &apps,
+            &backends,
+            &HashMap::new(),
+            "noble",
+            "Example",
+            SearchSortMode::Relevance,
+            WaylandFilter::All,
+        );
+        assert_eq!(results[0].backend_name(), "flatpak-system");
+        let discovery = explore_results_all(&apps, &backends, &HashMap::new(), "noble", 0);
+        assert_eq!(
+            discovery[&ExplorePage::PopularApps][0].backend_name(),
+            "flatpak-system"
+        );
+        apps.get_mut(&id).unwrap()[0].installed = true;
+        let installed = installed_results_data(&apps, &backends, &HashMap::new(), "noble");
+        assert_eq!(installed[0].backend_name(), "packagekit");
+    }
+
+    #[test]
+    fn zorin_origin_is_visible_in_search_and_discovery() {
+        let info = AppInfo {
+            name: "Zorin App".to_string(),
+            origin_opt: Some("zorin".to_string()),
+            pkgnames: vec!["zorin-app".to_string()],
+            ..AppInfo::default()
+        };
+        let mut apps = Apps::new();
+        apps.insert(
+            AppId::new("org.zorin.Example"),
+            vec![AppEntry {
+                backend_name: "packagekit",
+                info: Arc::new(info),
+                installed: true,
+            }],
+        );
+        let results = search_results(
+            &apps,
+            &Backends::new(),
+            &HashMap::new(),
+            "noble",
+            "Zorin",
+            SearchSortMode::Relevance,
+            WaylandFilter::All,
+        );
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].backend_name(), "packagekit");
+        let discovery = explore_results_all(&apps, &Backends::new(), &HashMap::new(), "noble", 0);
+        assert_eq!(discovery[&ExplorePage::PopularApps].len(), 1);
+    }
+
     #[test]
     fn discovery_preserves_popularity_without_external_stats() {
         let results = explore_results_all(
@@ -745,5 +868,62 @@ mod tests {
             WaylandFilter::All,
         );
         assert_eq!(results[0].info.name, "Zulu");
+    }
+}
+
+fn entry_available(
+    backend_name: &str,
+    info: &crate::app_info::AppInfo,
+    installed: bool,
+    backends: &Backends,
+) -> bool {
+    if installed || backend_name != "packagekit" {
+        return true;
+    }
+    backends
+        .get("packagekit")
+        .is_none_or(|backend| backend.is_package_available(&info.pkgnames))
+}
+
+#[cfg(test)]
+mod unified_sort_tests {
+    use super::*;
+    #[test]
+    fn mixed_sources_share_name_and_popularity_sorting() {
+        let make = |backend, name: &str, downloads| {
+            SearchResult::new(
+                backend,
+                crate::AppId::new(name),
+                None,
+                std::sync::Arc::new(crate::AppInfo {
+                    name: name.to_string(),
+                    monthly_downloads: downloads,
+                    ..crate::AppInfo::default()
+                }),
+                0,
+            )
+        };
+        let mut results = vec![
+            make("packagekit", "Zulu", 9),
+            make("steam", "Alpha", 0),
+            make("flatpak-user", "Bravo", 10),
+        ];
+        let stats = std::collections::HashMap::new();
+        sort_results(&mut results, SearchSortMode::Name, &stats);
+        assert_eq!(
+            results
+                .iter()
+                .map(|r| r.info.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["Alpha", "Bravo", "Zulu"]
+        );
+        sort_results(&mut results, SearchSortMode::MostDownloads, &stats);
+        assert_eq!(
+            results
+                .iter()
+                .map(|r| r.info.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["Bravo", "Zulu", "Alpha"]
+        );
     }
 }

@@ -1,4 +1,4 @@
-app-name = COSMIC Butik
+app-name = Kompas
 back = Bakåt
 cancel = Avbryt
 check-for-updates = Sök efter uppdateringar

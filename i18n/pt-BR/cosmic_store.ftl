@@ -1,4 +1,4 @@
-app-name = Loja de Aplicativos
+app-name = Kompas
 back = Voltar
 cancel = Cancelar
 check-for-updates = Verificar por atualizações

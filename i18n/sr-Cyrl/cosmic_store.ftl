@@ -1,4 +1,4 @@
-app-name = COSMIC Продавница
+app-name = Kompas
 back = Назад
 cancel = Прекини
 check-for-updates = Проверите ажурирања

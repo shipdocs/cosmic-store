@@ -1,4 +1,4 @@
-app-name = COSMIC Áruház
+app-name = Kompas
 back = Vissza
 cancel = Mégse
 check-for-updates = Frissítések keresése

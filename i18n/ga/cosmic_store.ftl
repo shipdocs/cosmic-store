@@ -1,4 +1,4 @@
-app-name = Stóras COSMIC
+app-name = Kompas
 back = Ar ais
 cancel = Cealaigh
 check-for-updates = Seiceáil do nuashonruithe

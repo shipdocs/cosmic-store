@@ -1,4 +1,4 @@
-# ShipDocs Store (COSMIC-based)
+# Kompas (COSMIC-based)
 
 An independently maintained fork of [COSMIC Store](https://github.com/pop-os/cosmic-store), targeting Zorin and Ubuntu desktops. It combines Flatpak and PackageKit with software discovery and estimated Wayland compatibility.
 
@@ -26,7 +26,7 @@ Install the native build dependencies:
 ```bash
 sudo apt update
 sudo apt install build-essential git pkg-config libflatpak-dev libssl-dev \
-    libxkbcommon-dev libwayland-dev libfontconfig1-dev libegl1-mesa-dev
+    libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev libfontconfig1-dev libegl1-mesa-dev
 ```
 
 Clone and build the development branch without changing the lockfile:
@@ -85,10 +85,48 @@ Pull requests into `develop` and pushes to `develop` run these checks on Ubuntu 
 
 ## Current limitations
 
-- The new-apps discovery page is not implemented.
-- Steam, Epic, GOG, and Proton catalogs are not integrated.
+- New releases on Steam are now shown; first-added dates for Flatpak/system apps are not available yet.
+- Steam discovery and search are integrated. Epic and GOG catalogs remain future work.
+- Steam controls purchase and installation; ownership is not checked by this store.
+- ProtonDB opens as an external compatibility reference; compatibility ratings are not fetched or asserted.
 - Wayland badges are estimates; they do not certify GPU, controller, or runtime compatibility.
 
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
+
+## Unified discovery
+
+The start page shows new Steam releases and games before general application categories.
+Steam artwork, storefront pricing, controller metadata and Linux platform flags come
+from Steam's public store endpoints. These endpoints are not a guaranteed stable API.
+The Netherlands region is used for displayed prices. Cached featured metadata remains
+available if Steam cannot be reached. Local applications remain usable without Steam.
+
+Search first displays results from configured Flatpak and system sources, then adds
+Steam matches after a short typing debounce. Plain text queries of at least two
+characters are sent to Steam when the Wayland filter is set to All. URI/file/codec
+searches remain local. Search GTA expands to Grand Theft Auto; Photoshop, Premiere
+and Microsoft Office searches also suggest available native alternatives.
+
+System software is resolved through PackageKit against enabled repositories, including
+Zorin's own repositories. Metadata origins no longer need to contain an Ubuntu codename.
+The store does not add repositories or expand package permissions automatically.
+
+Steam games have separate actions to open the installation dialog in Steam, view/buy
+in the web store, and check ProtonDB. Installation requires a working Steam URI handler
+and any required game license. Steam artwork is cached locally; an empty cache displays
+a game icon until images arrive. This does not claim that every Windows game or online
+mode works on Linux. No Epic/GOG login, purchase or account linking is performed.
+
+### Unified browsing and compatibility
+
+“All apps” lists applications from the configured system/Flatpak catalogs and the fetched Steam featured selection. Live search extends Steam discovery; this is not an exhaustive local index of Steam. The source selector applies to search, category lists and home sections, and can choose a Flatpak alternative when the preferred source is a system package. All result sources share sorting, including Name (A–Z). Popularity and update sorts place items with missing metadata after items with known values; Steam sales are not converted to Flatpak download counts.
+
+Native Linux only is enabled by default. It hides Steam titles unless Steam explicitly reports a native Linux version. Disable it to include titles requiring a Proton compatibility check. PackageKit availability is checked against the configured system; Flatpak catalogs are selected by libflatpak for the host architecture. Native support does not establish that a particular GPU, driver, RAM configuration, anti-cheat setup or desktop session meets an app's requirements. Hardware/Proton compatibility inference remains future work. This conservative default intentionally hides many Windows games that can run well with Proton.
+
+The user-facing product name is **Kompas**, a working name rather than a cleared trademark. The executable and application ID remain `cosmic-store` / `com.system76.CosmicStore` for upgrade compatibility.
+
+Malformed YAML components are skipped individually so one duplicate translation key cannot discard an entire system repository; invalid repository headers still fail. Existing AppStream caches are rebuilt once for this parser revision.
+
+Steam discovery validates product types through cached app-details metadata before publishing items. Hardware and video products are excluded even when storefront search calls them apps. Product facts are cached for a day, with previously validated metadata as an offline fallback. First-time remote results may arrive later because this requires additional background requests; local results remain available immediately.

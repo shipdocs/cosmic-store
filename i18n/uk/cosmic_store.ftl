@@ -1,4 +1,4 @@
-app-name = Крамниця застосунків COSMIC
+app-name = Kompas
 back = Назад
 cancel = Скасувати
 check-for-updates = Перевірити наявність оновлень

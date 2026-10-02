@@ -138,10 +138,16 @@ enum TransactionFlag {
 }
 
 #[derive(Debug)]
+enum PackageAvailability {
+    Known(HashSet<String>),
+    Unknown,
+}
+
+#[derive(Debug)]
 pub struct Packagekit {
     connection: Connection,
     appstream_caches: Vec<AppstreamCache>,
-    available_packages_cache: Arc<Mutex<Option<HashSet<String>>>>,
+    available_packages_cache: Arc<Mutex<Option<PackageAvailability>>>,
 }
 
 impl Packagekit {
@@ -150,12 +156,12 @@ impl Packagekit {
         let connection = Connection::system()?;
         let source_id = "packagekit";
         //TODO: translate?
-        let source_name = "System";
+        let source_name = crate::fl!("system-packages");
         Ok(Self {
             connection,
             appstream_caches: vec![AppstreamCache::system(
                 source_id.to_string(),
-                source_name.to_string(),
+                source_name,
                 locale,
             )],
             available_packages_cache: Arc::new(Mutex::new(None)),
@@ -168,13 +174,29 @@ impl Packagekit {
         let start = Instant::now();
 
         let tx = self.transaction()?;
-        tx.get_packages(FilterKind::NotInstalled as u64 | FilterKind::Arch as u64)?;
-        let packages = self.package_transaction(tx)?;
-
+        // Subscribe before starting: fast cached transactions can otherwise finish
+        // before the signal handler is attached, leaving discovery waiting forever.
+        let signals = tx.receive_all_signals()?;
+        tx.get_packages(FilterKind::Arch as u64)?;
+        // Availability needs raw names only, without app cards or icon loading.
         let mut available = HashSet::new();
-        for package in packages {
-            for pkgname in &package.info.pkgnames {
-                available.insert(pkgname.clone());
+        for signal in signals {
+            let Some(member) = signal.member() else {
+                continue;
+            };
+            match member.as_str() {
+                "Package" => {
+                    let (_, package_id, _) = signal.body::<(u32, String, String)>()?;
+                    if let Some(name) = package_id.split(';').next() {
+                        available.insert(name.to_string());
+                    }
+                }
+                "ErrorCode" => {
+                    let (code, details) = signal.body::<(u32, String)>()?;
+                    return Err(format!("{details} (code {code})").into());
+                }
+                "Finished" => break,
+                _ => {}
             }
         }
 
@@ -192,18 +214,23 @@ impl Packagekit {
         let mut cache = self.available_packages_cache.lock().unwrap();
         if cache.is_none() {
             match self.build_available_packages_cache() {
-                Ok(c) => *cache = Some(c),
+                Ok(c) => *cache = Some(PackageAvailability::Known(c)),
                 Err(e) => {
                     log::error!("Failed to build available packages cache: {}", e);
-                    // If cache build fails, assume package is available (fail open)
-                    return true;
+                    // Availability is unknown, not unavailable. Cache the failure so
+                    // browsing does not repeat a failed transaction for every app.
+                    *cache = Some(PackageAvailability::Unknown);
                 }
             }
         }
 
         // Check if any of the package names are available
-        let cache_ref = cache.as_ref().unwrap();
-        pkgnames.iter().any(|name| cache_ref.contains(name))
+        match cache.as_ref() {
+            Some(PackageAvailability::Known(available)) => {
+                pkgnames.iter().any(|name| available.contains(name))
+            }
+            _ => true,
+        }
     }
 
     fn transaction(&self) -> Result<TransactionProxyBlocking<'_>, Box<dyn Error>> {

@@ -1,4 +1,4 @@
-app-name = Obchod COSMIC
+app-name = Kompas
 back = Zpět
 cancel = Zrušit
 check-for-updates = Zkontrolovat aktualizace

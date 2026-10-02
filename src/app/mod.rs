@@ -340,7 +340,7 @@ impl App {
             }
         }
         let mut progress_opt = None;
-        for (_id, (op, progress)) in self.pending_operations.iter() {
+        for (op, progress) in self.pending_operations.values() {
             if op.backend_name == selected_backend_name
                 && op
                     .infos
@@ -821,7 +821,7 @@ impl App {
 
         if !self.pending_operations.is_empty() {
             let mut section = widget::settings::section().title(fl!("pending"));
-            for (_id, (op, progress)) in self.pending_operations.iter().rev() {
+            for (op, progress) in self.pending_operations.values().rev() {
                 section = section.add(widget::column::with_children(vec![
                     widget::progress_bar(0.0..=100.0, *progress)
                         .height(progress_bar_height)

@@ -665,7 +665,7 @@ pub fn explore_results_all(
     }
 
     // Sort each explore page's results
-    for (_page, results) in results_map.iter_mut() {
+    for results in results_map.values_mut() {
         results.par_sort_unstable_by(|a, b| match a.weight.cmp(&b.weight) {
             cmp::Ordering::Equal => match LANGUAGE_SORTER.compare(&a.info.name, &b.info.name) {
                 cmp::Ordering::Equal => LANGUAGE_SORTER.compare(a.backend_name(), b.backend_name()),

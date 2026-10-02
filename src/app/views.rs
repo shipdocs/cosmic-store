@@ -253,7 +253,7 @@ pub fn render_updates_page<'a>(
                         }
                     }
                     let mut progress_opt = None;
-                    for (_id, (op, progress)) in pending_operations.iter() {
+                    for (op, progress) in pending_operations.values() {
                         if &op.backend_name == backend_name
                             && op
                                 .infos
@@ -618,7 +618,7 @@ pub fn render_footer<'a>(
     let mut title = String::new();
     let mut total_progress = 0.0;
     let mut count = 0;
-    for (_id, (op, progress)) in pending_operations.iter() {
+    for (op, progress) in pending_operations.values() {
         if title.is_empty() {
             title = op.pending_text(*progress as i32);
         }
@@ -801,7 +801,7 @@ pub fn render_gstreamer_view<'a>(
     if installing {
         let mut list = widget::list_column();
 
-        for (_id, (op, progress)) in pending_operations.iter().rev() {
+        for (op, progress) in pending_operations.values().rev() {
             list = list.add(widget::column::with_children(vec![
                 widget::progress_bar(0.0..=100.0, *progress)
                     .height(Length::Fixed(4.0))

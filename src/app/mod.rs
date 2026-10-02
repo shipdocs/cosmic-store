@@ -114,6 +114,7 @@ pub struct App {
     pub(crate) store_source_options: Vec<String>,
     pub(crate) native_only: bool,
     pub(crate) results_limit: usize,
+    pub(crate) search_pending: bool,
     pub(crate) search_sort_options: Vec<String>,
     pub(crate) wayland_filter: WaylandFilter,
     pub(crate) wayland_filter_options: Vec<String>,
@@ -1408,9 +1409,14 @@ impl App {
         ])
         .spacing(12)
         .padding([12, 16]);
-        widget::column::with_children(vec![controls.into(), content])
-            .spacing(8)
-            .into()
+        let mut page = widget::column::with_capacity(3).push(controls);
+        if self.search_pending && self.search_active {
+            page = page.push(
+                widget::container(widget::text::caption(fl!("search-steam-loading")))
+                    .padding([0, 16]),
+            );
+        }
+        page.push(content).spacing(8).into()
     }
 }
 
@@ -1531,6 +1537,7 @@ impl Application for App {
             ],
             native_only: true,
             results_limit: crate::constants::MAX_RESULTS,
+            search_pending: false,
             search_sort_options,
             wayland_filter: WaylandFilter::All,
             wayland_filter_options,

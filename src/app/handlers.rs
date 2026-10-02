@@ -86,6 +86,7 @@ pub fn handle_search_message(app: &mut App, message: Message) -> Task<Message> {
         Message::SearchClear => {
             app.search_active = false;
             app.search_input.clear();
+            app.search_pending = false;
             if app.search_results.take().is_some() {
                 app.update_scroll()
             } else {
@@ -130,20 +131,45 @@ pub fn handle_search_message(app: &mut App, message: Message) -> Task<Message> {
                 Task::none()
             }
         }
+        Message::SearchProgress(input) => {
+            if input == app.search_input {
+                app.search_pending = true;
+            }
+            Task::none()
+        }
         Message::SearchAugmented(input, mut results) => {
             if input == app.search_input {
+                app.search_pending = false;
+                let images = results
+                    .iter()
+                    .filter(|result| result.backend_name() == crate::catalog::STEAM)
+                    .map(|result| {
+                        (
+                            result.id.clone(),
+                            vec![crate::app_entry::AppEntry {
+                                backend_name: crate::catalog::STEAM,
+                                info: result.info.clone(),
+                                installed: false,
+                            }],
+                        )
+                    })
+                    .collect();
+                let images_task = super::data::catalog_images_task(images);
                 app.filter_store_results(&mut results);
                 app.load_icons_for_results(&mut results);
                 app.search_results = Some((input, results));
-                if app.details_page_opt.is_none() {
-                    return app.update_scroll();
-                }
+                return if app.details_page_opt.is_none() {
+                    Task::batch([app.update_scroll(), images_task])
+                } else {
+                    images_task
+                };
             }
             Task::none()
         }
         Message::SearchResults(input, mut results, auto_select) => {
             if input == app.search_input {
                 app.filter_store_results(&mut results);
+                app.search_pending = false;
                 log::info!("search {:?} ready: {} results", input, results.len());
                 app.load_icons_for_results(&mut results);
 
@@ -623,6 +649,7 @@ pub fn update(app: &mut App, message: Message) -> Task<Message> {
         | Message::SearchInput(_)
         | Message::SearchResults(..)
         | Message::SearchAugmented(..)
+        | Message::SearchProgress(_)
         | Message::StoreSource(_)
         | Message::NativeOnly(_)
         | Message::ResetFilters

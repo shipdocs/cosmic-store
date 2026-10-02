@@ -252,6 +252,7 @@ pub fn search_task(
             if SEARCH_GENERATION.load(Ordering::Relaxed) != generation {
                 return;
             }
+            let _ = output.send(Message::SearchProgress(input.clone())).await;
             let remote_input = input.clone();
             let external = tokio::task::spawn_blocking(move || {
                 crate::catalog::search(&remote_input).unwrap_or_else(|error| {

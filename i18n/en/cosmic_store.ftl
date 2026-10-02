@@ -210,3 +210,5 @@ steam-get-client = Find and install Steam
 steam-ready = Steam is available. It handles ownership and installation.
 
 search-store = Search apps and games
+
+search-steam-loading = Searching Steam… Your local apps are already shown.

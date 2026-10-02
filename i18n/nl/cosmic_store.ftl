@@ -150,3 +150,5 @@ steam-get-client = Steam zoeken en installeren
 steam-ready = Steam is beschikbaar en regelt eigendom en installatie.
 
 search-store = Zoek apps en games
+
+search-steam-loading = Steam doorzoeken… Je lokale apps staan er alvast.

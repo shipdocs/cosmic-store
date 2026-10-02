@@ -79,6 +79,7 @@ pub enum Message {
     SearchInput(String),
     SearchResults(String, Vec<SearchResult>, bool),
     SearchAugmented(String, Vec<SearchResult>),
+    SearchProgress(String),
     SearchSortMode(SearchSortMode),
     StoreSource(crate::search::StoreSource),
     NativeOnly(bool),

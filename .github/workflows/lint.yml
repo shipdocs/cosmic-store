@@ -20,7 +20,8 @@ jobs:
       - name: Install native build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential pkg-config libflatpak-dev libssl-dev libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev libfontconfig1-dev libegl1-mesa-dev
+          sudo apt-get install -y build-essential pkg-config apt-config-icons apt-config-icons-hidpi apt-config-icons-large apt-config-icons-large-hidpi adwaita-icon-theme libflatpak-dev libssl-dev libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev libfontconfig1-dev libegl1-mesa-dev
+          sudo apt-get update
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable

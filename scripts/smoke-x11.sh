@@ -36,6 +36,8 @@ for attempt in $(seq 1 60); do
     sleep 1
 done
 grep -Eq 'searched for categories \[\].*found [1-9][0-9]* results' "$output/startup.log"
+# Trigger a fresh draw after background results replace the previous page.
+xdotool mousemove --window "$window_id" 500 220
 sleep 2
 kill -0 "$app_pid"
 import -window "$window_id" "$output/all-apps-native.png"

@@ -14,6 +14,7 @@ Build-Depends:
     libfontconfig1-dev,
     libegl1-mesa-dev,
     pkg-config,
+    python3,
     rust-all,
 Standards-Version: 4.6.2
 Homepage: https://github.com/shipdocs/cosmic-store
@@ -33,7 +34,10 @@ Depends:
     ${misc:Depends},
     ${shlibs:Depends}
 Recommends: flatpak, packagekit
-Description: Kompas software store for Zorin and Ubuntu
- A fork of COSMIC Store with Flatpak and PackageKit integration,
- download-based discovery and estimated Wayland compatibility badges.
- Targets Zorin and Ubuntu desktops without Pop!_OS-specific data packages.
+Description: Discover apps and games in one place
+ Kompas brings together Linux apps from your system and Flathub,
+ alongside games from Steam. Browse categories and game genres,
+ search by name, and filter by source or native Linux support.
+ .
+ Install system and Flatpak apps directly, or continue in Steam.
+ Free and open source (GPL-3.0-only). Preview for Zorin 18 and Ubuntu 24.04.

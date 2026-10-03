@@ -1,6 +1,8 @@
 #TODO: more build-out, desktop actions, translations?
 [Desktop Entry]
 Name=Kompas
+Comment=Discover apps and games in one place
+Comment[nl]=Ontdek apps en games op één plek
 Exec=kompas %u
 Terminal=false
 Type=Application

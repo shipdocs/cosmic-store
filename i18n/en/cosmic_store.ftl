@@ -263,6 +263,6 @@ subcategory-monitoring = System monitoring
 steam-browse-scope = This overview shows a selection of Steam games. Use search to find more games.
 all-games = All games
 sort-newest-games = Newest games (release date)
-game-date-help = Newest games uses known original release dates; unknown dates come last. Package updates do not make an old game new.
+game-date-help = Newest games uses original release dates, not updates. Unknown dates come last.
 game-release-date = Released: { $date }
 game-release-unknown = Original release date unknown

@@ -203,6 +203,6 @@ subcategory-monitoring = Systeemmonitoring
 steam-browse-scope = Dit overzicht toont een selectie Steam-spellen. Gebruik zoeken om meer spellen te vinden.
 all-games = Alle spellen
 sort-newest-games = Nieuwste spellen (releasedatum)
-game-date-help = Nieuwste spellen gebruikt bekende oorspronkelijke releasedatums; onbekende datums staan onderaan. Pakketupdates maken een oud spel niet nieuw.
+game-date-help = Nieuwste spellen gebruikt oorspronkelijke releasedatums, geen updates. Onbekende datums staan onderaan.
 game-release-date = Uitgebracht: { $date }
 game-release-unknown = Oorspronkelijke releasedatum onbekend

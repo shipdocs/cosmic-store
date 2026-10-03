@@ -88,7 +88,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     Ok(ok) => ok,
                     Err((errs, config)) => {
                         log::info!("errors loading config: {:?}", errs);
-                        config
+                        // Preserve preferences from the previously named fork.
+                        cosmic_config::Config::new("com.system76.CosmicStore", CONFIG_VERSION)
+                            .ok()
+                            .and_then(|legacy| Config::get_entry(&legacy).ok())
+                            .unwrap_or(config)
                     }
                 };
                 (Some(config_handler), config)

@@ -1,5 +1,5 @@
 name := 'kompas'
-export APPID := 'com.system76.CosmicStore'
+export APPID := 'app.shipdocs.Kompas'
 
 rootdir := ''
 prefix := '/usr'
@@ -72,6 +72,7 @@ install:
     ln -sf kompas {{base-dir}}/bin/cosmic-store
     install -Dm0644 {{desktop-src}} {{desktop-dst}}
     install -Dm0644 {{metainfo-src}} {{metainfo-dst}}
+    python3 scripts/package-metadata.py {{base-dir}}/share
     for size in `ls {{icons-src}}`; do \
         install -Dm0644 "{{icons-src}}/$size/apps/{{APPID}}.svg" "{{icons-dst}}/$size/apps/{{APPID}}.svg"; \
     done

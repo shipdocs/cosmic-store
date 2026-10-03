@@ -21,7 +21,7 @@ jobs:
         timeout-minutes: 6
         run: |
           sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
-          sudo apt-get -o DPkg::Lock::Timeout=120 -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y xvfb x11-utils xdotool imagemagick dbus-x11 mesa-vulkan-drivers libgl1-mesa-dri build-essential dpkg-dev desktop-file-utils pkg-config apt-config-icons apt-config-icons-hidpi apt-config-icons-large apt-config-icons-large-hidpi adwaita-icon-theme libflatpak-dev libssl-dev libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev libfontconfig1-dev libegl1-mesa-dev
+          sudo apt-get -o DPkg::Lock::Timeout=120 -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y xvfb x11-utils xdotool imagemagick dbus-x11 mesa-vulkan-drivers libgl1-mesa-dri build-essential dpkg-dev desktop-file-utils appstream gnome-software pkg-config apt-config-icons apt-config-icons-hidpi apt-config-icons-large apt-config-icons-large-hidpi adwaita-icon-theme libflatpak-dev libssl-dev libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev libfontconfig1-dev libegl1-mesa-dev
           sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
 
       - name: Install Rust
@@ -84,7 +84,13 @@ jobs:
           /usr/bin/kompas --help | grep -q 'kompas'
           /usr/bin/cosmic-store --help | grep -q 'kompas'
           test -n "$(find /usr/share/icons/Adwaita -name window-close-symbolic.svg -print -quit)"
-          desktop-file-validate /usr/share/applications/com.system76.CosmicStore.desktop
+          desktop-file-validate /usr/share/applications/app.shipdocs.Kompas.desktop
+          appstreamcli validate --no-net /usr/share/metainfo/app.shipdocs.Kompas.metainfo.xml
+          appstreamcli validate --no-net /usr/share/swcatalog/xml/kompas.xml
+          sudo appstreamcli refresh-cache --force
+          appstreamcli get --details app.shipdocs.Kompas | tee /tmp/kompas-appstream.txt
+          grep -q 'kompas' /tmp/kompas-appstream.txt
+          grep -q 'GPL-3.0-only' /tmp/kompas-appstream.txt
 
       - name: Upload installable preview
         uses: actions/upload-artifact@v4
@@ -99,6 +105,12 @@ jobs:
           LANG: en_US.UTF-8
           WINIT_UNIX_BACKEND: x11
         run: dbus-run-session -- xvfb-run -a -s '-screen 0 1280x900x24' bash scripts/smoke-x11.sh /usr/bin/kompas
+
+      - name: Show the installed Kompas package in GNOME Software
+        timeout-minutes: 2
+        env:
+          LANG: en_US.UTF-8
+        run: dbus-run-session -- xvfb-run -a -s '-screen 0 1280x1000x24' bash scripts/smoke-software.sh dist/*.deb smoke-artifacts
 
       - name: Upload startup evidence
         if: always()

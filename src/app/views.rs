@@ -437,12 +437,9 @@ pub fn render_explore_page<'a>(
                     column = column.push(
                         widget::container(
                             widget::column::with_children(vec![
-                                widget::icon::icon(icon_cache_handle(
-                                    "com.system76.CosmicStore",
-                                    128,
-                                ))
-                                .size(64)
-                                .into(),
+                                widget::icon::icon(icon_cache_handle("app.shipdocs.Kompas", 128))
+                                    .size(64)
+                                    .into(),
                                 widget::Space::with_height(spacing.space_l).into(),
                                 widget::text::title3(fl!("loading")).into(),
                                 widget::Space::with_height(spacing.space_xs).into(),
@@ -500,7 +497,7 @@ pub fn render_explore_page<'a>(
                 column = column.push(
                     widget::container(
                         widget::column::with_children(vec![
-                            widget::icon::from_name("com.system76.CosmicStore")
+                            widget::icon::from_name("app.shipdocs.Kompas")
                                 .size(128)
                                 .into(),
                             widget::Space::with_height(spacing.space_l).into(),

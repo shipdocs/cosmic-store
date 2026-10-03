@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>app.shipdocs.Kompas</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-only</project_license>
+  <developer_name>ShipDocs</developer_name>
+  <update_contact>info@shipdocs.app</update_contact>
+  <url type="homepage">https://github.com/shipdocs/cosmic-store</url>
+  <url type="bugtracker">https://github.com/shipdocs/cosmic-store</url>
+  <pkgname>kompas</pkgname>
+  <name>Kompas</name>
+  <summary>Discover apps and games on Zorin and Ubuntu</summary>
+  <summary xml:lang="nl">Ontdek apps en games op Zorin en Ubuntu</summary>
+  <description>
+    <p>Find your next app or game in one place. Kompas brings together software from your Linux system, Flathub and Steam in a clear, easy-to-browse store.</p>
+    <p xml:lang="nl">Vind je volgende app of game op één plek. Kompas brengt software van je Linux-systeem, Flathub en Steam samen in een overzichtelijke winkel.</p>
+    <ul>
+      <li>Explore categories and game genres, or search by name.</li>
+      <li>Filter by source and native Linux support.</li>
+      <li>Discover newer games, sorted by original release date.</li>
+      <li>Install system and Flatpak apps, or continue in Steam.</li>
+    </ul>
+    <ul xml:lang="nl">
+      <li>Ontdek categorieën en spelgenres, of zoek op naam.</li>
+      <li>Filter op bron en ondersteuning voor Linux.</li>
+      <li>Vind nieuwere games, gesorteerd op oorspronkelijke releasedatum.</li>
+      <li>Installeer systeem- en Flatpak-apps, of ga verder in Steam.</li>
+    </ul>
+    <p>Free and open source. Uses your existing software sources. Steam games require Steam and may require a purchase. Native Linux support does not guarantee that your hardware meets every app's requirements. This is a preview for Zorin 18 and Ubuntu 24.04.</p>
+    <p xml:lang="nl">Gratis en open source. Gebruikt je bestaande softwarebronnen. Steam-games vereisen Steam en kunnen betaald zijn. Linux-ondersteuning garandeert niet dat je hardware aan alle eisen voldoet. Dit is een testversie voor Zorin 18 en Ubuntu 24.04.</p>
+  </description>
+  <screenshots>
+    <screenshot type="default">
+      <caption>Browse apps and games from one place</caption>
+      <image>https://github.com/shipdocs/cosmic-store/raw/refs/heads/develop/res/screenshots/explore.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Find newer Linux games and explore genres</caption>
+      <image>https://github.com/shipdocs/cosmic-store/raw/refs/heads/develop/res/screenshots/games.png</image>
+    </screenshot>
+  </screenshots>
+  <categories><category>System</category><category>PackageManager</category></categories>
+  <supports><control>keyboard</control><control>pointing</control></supports>
+  <releases>
+    <release version="0.1.0" date="2026-10-03" type="development">
+      <description>
+        <p>Preview: unified app and game discovery, source filters, game genres, release-date sorting and back navigation.</p>
+        <p xml:lang="nl">Testversie: apps en games op één plek, bronfilters, spelgenres, sorteren op releasedatum en een terugknop.</p>
+      </description>
+    </release>
+  </releases>
+  <launchable type="desktop-id">app.shipdocs.Kompas.desktop</launchable>
+  <icon type="stock">app.shipdocs.Kompas</icon>
+  <provides><binary>kompas</binary></provides>
+</component>

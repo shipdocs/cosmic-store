@@ -1,11 +1,13 @@
 #TODO: more build-out, desktop actions, translations?
 [Desktop Entry]
 Name=Kompas
+Comment=Discover apps and games in one place
+Comment[nl]=Ontdek apps en games op één plek
 Exec=kompas %u
 Terminal=false
 Type=Application
 StartupNotify=true
-Icon=com.system76.CosmicStore
+Icon=app.shipdocs.Kompas
 Categories=System;PackageManager;
 Keywords=App;Software;Store;Shop;
 Keywords[ar]=متجر;تطبيق;تطبيقات;برامج

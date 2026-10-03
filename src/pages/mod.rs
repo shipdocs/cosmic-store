@@ -181,7 +181,7 @@ impl NavPage {
             Self::Develop => &[
                 Subcategory {
                     key: "subcategory-coding",
-                    categories: &[Category::IDE, Category::TextEditor],
+                    categories: &[Category::Ide, Category::TextEditor],
                 },
                 Subcategory {
                     key: "subcategory-debugging",

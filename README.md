@@ -2,7 +2,7 @@
 
 An independently maintained fork of [COSMIC Store](https://github.com/pop-os/cosmic-store), targeting Zorin and Ubuntu desktops. It combines Flatpak and PackageKit with software discovery and estimated Wayland compatibility.
 
-The existing `cosmic-store` binary, package name, and application ID are retained for compatibility. This is a ShipDocs project, not an official Zorin store.
+The program and package are named `kompas`. A `cosmic-store` command alias and the existing application ID are retained for compatibility. This is a ShipDocs project, not an official Zorin store.
 
 ## Install the Zorin test build
 
@@ -14,8 +14,8 @@ extract the ZIP and install the `.deb` on Zorin 18 / Ubuntu 24.04 (64-bit Intel/
 sudo apt install ./kompas_*.deb
 ```
 
-Open **Kompas** from the application menu. This keeps the existing package identity
-`cosmic-store` so future builds upgrade the same installation. Preview packages
+Open **Kompas** from the application menu or run `kompas`. Installation replaces
+the previous `cosmic-store` package automatically. Preview packages
 use a stripped debug build; release optimization can follow user testing.
 The SHA256SUMS file accompanies each package. The installed package is exercised
 under X11 by CI before the workflow succeeds.
@@ -77,7 +77,7 @@ Actual startup and rendering must still be tested on your Zorin X11/Wayland sess
 For startup diagnostics:
 
 ```bash
-RUST_LOG=cosmic_store=info RUST_BACKTRACE=1 cargo +stable run --release --locked
+RUST_LOG=kompas=info RUST_BACKTRACE=1 cargo +stable run --release --locked
 ```
 
 The Debian packaging no longer requires Pop!_OS-specific `appstream-data-pop` or
@@ -93,7 +93,7 @@ dpkg-buildpackage -us -uc -b
 ```
 
 Use this after the source build and checks succeed. For a lighter preview package
-from an existing build, run `bash scripts/package-preview.sh target/release/cosmic-store`.
+from an existing build, run `bash scripts/package-preview.sh target/release/kompas`.
 CI publishes an installable preview package for testing.
 
 ## Development checks
@@ -148,7 +148,7 @@ mode works on Linux. No Epic/GOG login, purchase or account linking is performed
 
 Native Linux only is enabled by default. It hides Steam titles unless Steam explicitly reports a native Linux version. Disable it to include titles requiring a Proton compatibility check. PackageKit availability is checked against the configured system; Flatpak catalogs are selected by libflatpak for the host architecture. Native support does not establish that a particular GPU, driver, RAM configuration, anti-cheat setup or desktop session meets an app's requirements. Hardware/Proton compatibility inference remains future work. This conservative default intentionally hides many Windows games that can run well with Proton.
 
-The user-facing product name is **Kompas**, a working name rather than a cleared trademark. The executable and application ID remain `cosmic-store` / `com.system76.CosmicStore` for upgrade compatibility.
+The user-facing product name is **Kompas**, a working name rather than a cleared trademark. The executable and Debian package are `kompas`. The internal application ID remains `com.system76.CosmicStore` to preserve existing desktop associations and preferences; the old command is a compatibility alias. Window controls use Adwaita symbolic icons, which are a package dependency.
 
 Malformed YAML components are skipped individually so one duplicate translation key cannot discard an entire system repository; invalid repository headers still fail. Existing AppStream caches are rebuilt once for this parser revision.
 

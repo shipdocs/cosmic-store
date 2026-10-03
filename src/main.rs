@@ -101,6 +101,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut settings = Settings::default();
     settings = settings.theme(config.app_theme.theme());
+    // COSMIC is not installed on Zorin; Adwaita supplies symbolic window controls.
+    settings = settings.default_icon_theme("Adwaita");
     settings = settings.size_limits(Limits::NONE.min_width(420.0).min_height(300.0));
     settings = settings.exit_on_close(false);
 

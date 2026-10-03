@@ -64,9 +64,26 @@ jobs:
 
       - name: Package and install Kompas preview
         run: |
+          # Exercise the package rename from a representative legacy installation.
+          legacy=$(mktemp -d)
+          mkdir -p "$legacy/DEBIAN" "$legacy/usr/bin"
+          printf 'Package: cosmic-store\nVersion: 0.1.0+kompas.20261003091812.fe6f72e\nArchitecture: amd64\nMaintainer: ShipDocs <info@shipdocs.app>\nDescription: legacy package upgrade fixture\n' > "$legacy/DEBIAN/control"
+          printf '#!/bin/sh\nexit 0\n' > "$legacy/usr/bin/cosmic-store"
+          chmod 755 "$legacy/usr/bin/cosmic-store"
+          dpkg-deb --build --root-owner-group "$legacy" /tmp/legacy-cosmic-store.deb
+          sudo dpkg -i /tmp/legacy-cosmic-store.deb
+          rm -rf "$legacy"
           bash scripts/package-preview.sh
           sudo apt-get -o DPkg::Lock::Timeout=120 -o Acquire::Retries=2 install -y ./dist/*.deb
-          dpkg-query -W cosmic-store
+          dpkg-query -W kompas
+          if dpkg-query -W -f='${Status}' cosmic-store 2>/dev/null | grep -q 'install ok installed'; then
+            echo 'Legacy cosmic-store package was not replaced.' >&2
+            exit 1
+          fi
+          test "$(readlink /usr/bin/cosmic-store)" = kompas
+          /usr/bin/kompas --help | grep -q 'kompas'
+          /usr/bin/cosmic-store --help | grep -q 'kompas'
+          test -n "$(find /usr/share/icons/Adwaita -name window-close-symbolic.svg -print -quit)"
           desktop-file-validate /usr/share/applications/com.system76.CosmicStore.desktop
 
       - name: Upload installable preview
@@ -81,7 +98,7 @@ jobs:
         env:
           LANG: en_US.UTF-8
           WINIT_UNIX_BACKEND: x11
-        run: dbus-run-session -- xvfb-run -a -s '-screen 0 1280x900x24' bash scripts/smoke-x11.sh /usr/bin/cosmic-store
+        run: dbus-run-session -- xvfb-run -a -s '-screen 0 1280x900x24' bash scripts/smoke-x11.sh /usr/bin/kompas
 
       - name: Upload startup evidence
         if: always()

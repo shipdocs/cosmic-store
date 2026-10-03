@@ -1,3 +1,10 @@
+kompas (0.1.0+kompas1) noble; urgency=medium
+
+  * Rename the program and package to Kompas, replacing cosmic-store.
+  * Use Adwaita symbolic controls on Zorin and Ubuntu.
+
+ -- ShipDocs <info@shipdocs.app>  Sat, 03 Oct 2026 09:25:00 +0000
+
 cosmic-store (0.1.0+shipdocs1) noble; urgency=medium
 
   * Target Zorin/Ubuntu without mandatory Pop!_OS data or icon packages.

@@ -1,4 +1,4 @@
-Source: cosmic-store
+Source: kompas
 Section: admin
 Priority: optional
 Maintainer: ShipDocs <info@shipdocs.app>
@@ -18,17 +18,21 @@ Build-Depends:
 Standards-Version: 4.6.2
 Homepage: https://github.com/shipdocs/cosmic-store
 
-Package: cosmic-store
+Package: kompas
+Provides: cosmic-store
+Conflicts: cosmic-store
+Replaces: cosmic-store
 Architecture: amd64 arm64
 Depends:
     libxkbcommon-x11-0,
+    adwaita-icon-theme,
     apt-config-icons,
     apt-config-icons-hidpi,
     apt-config-icons-large,
     apt-config-icons-large-hidpi,
     ${misc:Depends},
     ${shlibs:Depends}
-Recommends: flatpak, packagekit, adwaita-icon-theme
+Recommends: flatpak, packagekit
 Description: Kompas software store for Zorin and Ubuntu
  A fork of COSMIC Store with Flatpak and PackageKit integration,
  download-based discovery and estimated Wayland compatibility badges.

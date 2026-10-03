@@ -1,11 +1,11 @@
 #!/bin/sh
-# prerm script for cosmic-store
+# prerm script for kompas
 
 set -e
 
 if [ "$1" = "remove" ] || [ "$1" = "deconfigure" ] ; then
 	update-alternatives --remove gstreamer-codec-install \
-			    /usr/bin/cosmic-store || true
+			    /usr/bin/kompas || true
 
 fi
 

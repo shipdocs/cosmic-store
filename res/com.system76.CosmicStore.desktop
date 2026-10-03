@@ -1,7 +1,7 @@
 #TODO: more build-out, desktop actions, translations?
 [Desktop Entry]
 Name=Kompas
-Exec=cosmic-store %u
+Exec=kompas %u
 Terminal=false
 Type=Application
 StartupNotify=true

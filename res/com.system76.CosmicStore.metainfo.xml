@@ -20,7 +20,7 @@
   <provides>
     <id>com.system76.CosmicApplication</id>
     <binaries>
-      <binary>cosmic-store</binary>
+      <binary>kompas</binary>
     </binaries>
     <mimetypes>
         <mimetype>application/x-debian-package</mimetype>

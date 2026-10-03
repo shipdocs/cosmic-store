@@ -26,7 +26,7 @@ i18n-embed = { version = "0.16", features = [
     "desktop-requester",
 ] }
 i18n-embed-fl = "0.10"
-rust-embed = "8"
+rust-embed = { version = "8", features = ["debug-embed"] }
 icu_collator = "2.1"
 icu_locale = "2.1"
 # appstream

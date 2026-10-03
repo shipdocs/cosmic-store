@@ -231,6 +231,7 @@ pub fn search_results(
     sort_mode: SearchSortMode,
     wayland_filter: WaylandFilter,
 ) -> Vec<SearchResult> {
+    let input = input.trim();
     if input.starts_with("/") && Path::new(&input).is_file() {
         return Vec::new(); // File paths handled by url_handlers in main
     }
@@ -253,7 +254,7 @@ pub fn search_results(
         backends,
         app_stats,
         os_codename,
-        |_id,
+        |id,
          info,
          _installed,
          stats_downloads: Option<u64>,
@@ -267,6 +268,18 @@ pub fn search_results(
                 let downloads = stats_downloads.unwrap_or(info.monthly_downloads);
                 (weight << 56) - (downloads as i64)
             };
+
+            let alias_matches = |alias: &str| {
+                alias
+                    .trim_end_matches(".desktop")
+                    .rsplit('.')
+                    .next()
+                    .is_some_and(|name| name.eq_ignore_ascii_case(input))
+            };
+            if alias_matches(id.normalized()) || info.desktop_ids.iter().any(|id| alias_matches(id))
+            {
+                return Some(stats_weight(0));
+            }
 
             //TODO: fuzzy match (nucleus-matcher?)
             let regex_weight = |string: &str, weight: i64| -> Option<i64> {
@@ -776,6 +789,50 @@ mod tests {
         fn is_package_available(&self, _: &[String]) -> bool {
             false
         }
+    }
+
+    #[test]
+    fn application_id_alias_beats_popular_description_mentions() {
+        let mut apps = Apps::new();
+        for (id, name, description, downloads) in [
+            (
+                "org.gimp.GIMP",
+                "GNU Image Manipulation Program",
+                "Photo editor",
+                1,
+            ),
+            (
+                "org.example.Cleaner",
+                "Cleaner",
+                "Cleans GIMP files",
+                1_000_000,
+            ),
+        ] {
+            apps.insert(
+                AppId::new(id),
+                vec![AppEntry {
+                    backend_name: "flatpak-system",
+                    info: Arc::new(AppInfo {
+                        name: name.to_string(),
+                        description: description.to_string(),
+                        monthly_downloads: downloads,
+                        ..AppInfo::default()
+                    }),
+                    installed: false,
+                }],
+            );
+        }
+        let results = search_results(
+            &apps,
+            &Backends::new(),
+            &HashMap::new(),
+            "noble",
+            " gimp ",
+            SearchSortMode::Relevance,
+            WaylandFilter::All,
+        );
+        assert_eq!(results.len(), 2);
+        assert_eq!(results[0].id, AppId::new("org.gimp.GIMP"));
     }
 
     #[test]

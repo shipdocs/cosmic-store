@@ -86,7 +86,15 @@ import -window "$window_id" "$output/narrow.png"
 
 # Category browsing exposes metadata-driven subcategories without clearing filters.
 xdotool windowsize "$window_id" 1024 768
+sleep 2
+xdotool windowfocus "$window_id"
+xdotool key --window "$window_id" ctrl+f ctrl+a BackSpace
 xdotool mousemove --window "$window_id" 90 312 click 1
+for attempt in $(seq 1 15); do
+    if grep -q 'searched for categories \[Game\]' "$output/startup.log"; then break; fi
+    sleep 1
+done
+grep -q 'searched for categories \[Game\]' "$output/startup.log"
 sleep 2
 import -window "$window_id" "$output/game-subcategories.png"
 kill -0 "$app_pid"

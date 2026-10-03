@@ -200,3 +200,4 @@ subcategory-files = Bestandsbeheer
 subcategory-archives = Archieven en compressie
 subcategory-security = Beveiliging
 subcategory-monitoring = Systeemmonitoring
+steam-browse-scope = Dit overzicht toont een selectie Steam-spellen. Gebruik zoeken om meer spellen te vinden.

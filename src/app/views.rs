@@ -82,6 +82,15 @@ pub fn render_category_page<'a>(
         .spacing(space_xxs)
         .width(Length::Fill);
     column = column.push(widget::text::title2(nav_page.title()));
+    if matches!(nav_page, NavPage::Game | NavPage::AllApps)
+        && category_results.as_ref().is_some_and(|(_, results)| {
+            results
+                .iter()
+                .any(|result| result.backend_name() == crate::catalog::STEAM)
+        })
+    {
+        column = column.push(widget::text::caption(fl!("steam-browse-scope")));
+    }
     if subcategory_options.len() > 1 {
         column = column.push(
             widget::row::with_children(vec![

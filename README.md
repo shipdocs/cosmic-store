@@ -2,7 +2,7 @@
 
 An independently maintained fork of [COSMIC Store](https://github.com/pop-os/cosmic-store), targeting Zorin and Ubuntu desktops. It combines Flatpak and PackageKit with software discovery and estimated Wayland compatibility.
 
-The program and package are named `kompas`. A `cosmic-store` command alias and the existing application ID are retained for compatibility. This is a ShipDocs project, not an official Zorin store.
+The program and package are named `kompas`. A `cosmic-store` command alias is retained for existing scripts. The app ID is `app.shipdocs.Kompas`; old preferences and file associations are preserved. This is a ShipDocs project, not an official Zorin store.
 
 ## Install the Zorin test build
 
@@ -148,7 +148,7 @@ mode works on Linux. No Epic/GOG login, purchase or account linking is performed
 
 Native Linux only is enabled by default. It hides Steam titles unless Steam explicitly reports a native Linux version. Disable it to include titles requiring a Proton compatibility check. PackageKit availability is checked against the configured system; Flatpak catalogs are selected by libflatpak for the host architecture. Native support does not establish that a particular GPU, driver, RAM configuration, anti-cheat setup or desktop session meets an app's requirements. Hardware/Proton compatibility inference remains future work. This conservative default intentionally hides many Windows games that can run well with Proton.
 
-The user-facing product name is **Kompas**, a working name rather than a cleared trademark. The executable and Debian package are `kompas`. The internal application ID remains `com.system76.CosmicStore` to preserve existing desktop associations and preferences; the old command is a compatibility alias. Window controls use Adwaita symbolic icons, which are a package dependency.
+The user-facing product name is **Kompas**, a working name rather than a cleared trademark. The executable and Debian package are `kompas`. The app ID is `app.shipdocs.Kompas`, so Kompas does not share COSMIC Store reviews. Legacy preferences are loaded on first use and a hidden desktop alias preserves existing file associations; the old command is a compatibility alias. Window controls use Adwaita symbolic icons, which are a package dependency.
 
 Malformed YAML components are skipped individually so one duplicate translation key cannot discard an entire system repository; invalid repository headers still fail. Existing AppStream caches are rebuilt once for this parser revision.
 

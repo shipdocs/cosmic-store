@@ -239,7 +239,7 @@ pub fn handle_search_message(app: &mut App, message: Message) -> Task<Message> {
                             #[cfg(target_os = "linux")]
                             {
                                 settings.platform_specific.application_id =
-                                    "com.system76.CosmicStoreDialog".to_string();
+                                    "app.shipdocs.KompasDialog".to_string();
                             }
                             let (window_id, task) = window::open(settings);
                             app.core.set_main_window_id(Some(window_id));

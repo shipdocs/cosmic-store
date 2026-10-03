@@ -1,5 +1,5 @@
 name := 'kompas'
-export APPID := 'com.system76.CosmicStore'
+export APPID := 'app.shipdocs.Kompas'
 
 rootdir := ''
 prefix := '/usr'

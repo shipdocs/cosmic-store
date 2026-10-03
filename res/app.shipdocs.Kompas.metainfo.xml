@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
-  <id>com.system76.CosmicStore</id>
+  <id>app.shipdocs.Kompas</id>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>GPL-3.0-only</project_license>
   <developer_name>ShipDocs</developer_name>
@@ -29,6 +29,16 @@
     <p>Free and open source. Uses your existing software sources. Steam games require Steam and may require a purchase. Native Linux support does not guarantee that your hardware meets every app's requirements. This is a preview for Zorin 18 and Ubuntu 24.04.</p>
     <p xml:lang="nl">Gratis en open source. Gebruikt je bestaande softwarebronnen. Steam-games vereisen Steam en kunnen betaald zijn. Linux-ondersteuning garandeert niet dat je hardware aan alle eisen voldoet. Dit is een testversie voor Zorin 18 en Ubuntu 24.04.</p>
   </description>
+  <screenshots>
+    <screenshot type="default">
+      <caption>Browse apps and games from one place</caption>
+      <image>https://github.com/shipdocs/cosmic-store/raw/refs/heads/develop/res/screenshots/explore.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Find newer Linux games and explore genres</caption>
+      <image>https://github.com/shipdocs/cosmic-store/raw/refs/heads/develop/res/screenshots/games.png</image>
+    </screenshot>
+  </screenshots>
   <categories><category>System</category><category>PackageManager</category></categories>
   <supports><control>keyboard</control><control>pointing</control></supports>
   <releases>
@@ -39,7 +49,7 @@
       </description>
     </release>
   </releases>
-  <launchable type="desktop-id">com.system76.CosmicStore.desktop</launchable>
-  <icon type="stock">com.system76.CosmicStore</icon>
+  <launchable type="desktop-id">app.shipdocs.Kompas.desktop</launchable>
+  <icon type="stock">app.shipdocs.Kompas</icon>
   <provides><binary>kompas</binary></provides>
 </component>

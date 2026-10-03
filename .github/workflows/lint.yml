@@ -84,11 +84,11 @@ jobs:
           /usr/bin/kompas --help | grep -q 'kompas'
           /usr/bin/cosmic-store --help | grep -q 'kompas'
           test -n "$(find /usr/share/icons/Adwaita -name window-close-symbolic.svg -print -quit)"
-          desktop-file-validate /usr/share/applications/com.system76.CosmicStore.desktop
-          appstreamcli validate --no-net /usr/share/metainfo/com.system76.CosmicStore.metainfo.xml
+          desktop-file-validate /usr/share/applications/app.shipdocs.Kompas.desktop
+          appstreamcli validate --no-net /usr/share/metainfo/app.shipdocs.Kompas.metainfo.xml
           appstreamcli validate --no-net /usr/share/swcatalog/xml/kompas.xml
           sudo appstreamcli refresh-cache --force
-          appstreamcli get --details com.system76.CosmicStore | tee /tmp/kompas-appstream.txt
+          appstreamcli get --details app.shipdocs.Kompas | tee /tmp/kompas-appstream.txt
           grep -q 'kompas' /tmp/kompas-appstream.txt
           grep -q 'GPL-3.0-only' /tmp/kompas-appstream.txt
 

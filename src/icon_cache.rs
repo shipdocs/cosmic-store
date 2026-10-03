@@ -51,7 +51,7 @@ impl IconCache {
 
         cache.insert(
             IconCacheKey {
-                name: "com.system76.CosmicStore",
+                name: "app.shipdocs.Kompas",
                 size: 128,
             },
             icon::from_svg_bytes(include_bytes!("../res/icons/kompas.svg")),

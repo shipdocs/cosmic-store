@@ -14,8 +14,8 @@ install -Dm0755 "$binary" "$staging/usr/bin/kompas"
 strip "$staging/usr/bin/kompas"
 # Existing scripts may still use the old command.
 ln -s kompas "$staging/usr/bin/cosmic-store"
-install -Dm0644 res/com.system76.CosmicStore.desktop "$staging/usr/share/applications/com.system76.CosmicStore.desktop"
-install -Dm0644 res/com.system76.CosmicStore.metainfo.xml "$staging/usr/share/metainfo/com.system76.CosmicStore.metainfo.xml"
+install -Dm0644 res/app.shipdocs.Kompas.desktop "$staging/usr/share/applications/app.shipdocs.Kompas.desktop"
+install -Dm0644 res/app.shipdocs.Kompas.metainfo.xml "$staging/usr/share/metainfo/app.shipdocs.Kompas.metainfo.xml"
 while IFS= read -r icon; do
     install -Dm0644 "$icon" "$staging/usr/share/icons/${icon#res/icons/}"
 done < <(find res/icons/hicolor -type f -name '*.svg')

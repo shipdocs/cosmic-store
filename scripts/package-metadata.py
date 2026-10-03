@@ -6,7 +6,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 share = Path(sys.argv[1])
-metainfo = share / 'metainfo/com.system76.CosmicStore.metainfo.xml'
+metainfo = share / 'metainfo/app.shipdocs.Kompas.metainfo.xml'
 tree = ET.parse(metainfo)
 component = tree.getroot()
 if len(sys.argv) > 2:
@@ -41,6 +41,11 @@ output = share / 'swcatalog/xml/kompas.xml'
 output.parent.mkdir(parents=True, exist_ok=True)
 catalog_tree.write(output, encoding='utf-8', xml_declaration=True)
 # A scalable icon works at any size without downloading artwork.
-icon = share / 'icons/hicolor/scalable/apps/com.system76.CosmicStore.svg'
+icon = share / 'icons/hicolor/scalable/apps/app.shipdocs.Kompas.svg'
 icon.parent.mkdir(parents=True, exist_ok=True)
 icon.write_bytes(Path('res/icons/kompas.svg').read_bytes())
+
+# Preserve existing file/URI associations while hiding the old menu entry.
+desktop = share / 'applications/app.shipdocs.Kompas.desktop'
+legacy_desktop = share / 'applications/com.system76.CosmicStore.desktop'
+legacy_desktop.write_text(desktop.read_text() + '\nNoDisplay=true\nX-AppStream-Ignore=true\n')

@@ -1455,6 +1455,7 @@ impl App {
                         2 => SearchSortMode::RecentlyUpdated,
                         3 => SearchSortMode::BestWaylandSupport,
                         4 => SearchSortMode::Name,
+                        5 => SearchSortMode::NewestGames,
                         _ => SearchSortMode::Relevance,
                     })
                 },
@@ -1545,6 +1546,7 @@ impl Application for App {
             fl!("sort-recent"),
             fl!("sort-wayland"),
             fl!("sort-name"),
+            fl!("sort-newest-games"),
         ];
         let wayland_filter_options = vec![
             fl!("filter-all"),
@@ -1747,6 +1749,11 @@ impl Application for App {
         self.search_results = None;
         self.details_page_opt = None;
         self.nav_model.activate(id);
+        if self.nav_model.active_data::<NavPage>() == Some(&NavPage::Game) {
+            self.search_sort_mode = SearchSortMode::NewestGames;
+        } else if self.search_sort_mode == SearchSortMode::NewestGames {
+            self.search_sort_mode = SearchSortMode::Relevance;
+        }
         self.subcategory_options = vec![fl!("subcategory-all")];
         if let Some(page) = self.nav_model.active_data::<NavPage>() {
             self.subcategory_options.extend(

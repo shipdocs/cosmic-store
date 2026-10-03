@@ -20,7 +20,7 @@ fn client() -> Result<reqwest::blocking::Client, reqwest::Error> {
 }
 
 fn cache_path() -> Option<PathBuf> {
-    Some(dirs::cache_dir()?.join("cosmic-store/steam-featured-v3.json"))
+    Some(dirs::cache_dir()?.join("cosmic-store/steam-featured-v4.json"))
 }
 
 pub fn steam_id(info: &AppInfo) -> Option<u64> {
@@ -59,7 +59,7 @@ fn validated_item(client: &reqwest::blocking::Client, item: &Value) -> Option<Va
         return None;
     }
     let path =
-        dirs::cache_dir().map(|p| p.join(format!("cosmic-store/steam-metadata-v2/{id}.json")));
+        dirs::cache_dir().map(|p| p.join(format!("cosmic-store/steam-metadata-v3/{id}.json")));
     let cached = path
         .as_ref()
         .and_then(|p| fs::read(p).ok())
@@ -78,7 +78,7 @@ fn validated_item(client: &reqwest::blocking::Client, item: &Value) -> Option<Va
             .send().ok().and_then(|r| r.error_for_status().ok()).and_then(|r| r.json::<Value>().ok())
             .and_then(|v| {
                 let data = v.get(id.to_string())?.get("data")?;
-                Some(serde_json::json!({"type": data.get("type")?, "platforms": data.get("platforms"), "controller_support": data.get("controller_support"), "genres": data.get("genres")}))
+                Some(serde_json::json!({"type": data.get("type")?, "platforms": data.get("platforms"), "controller_support": data.get("controller_support"), "genres": data.get("genres"), "release_date": data.get("release_date")}))
             });
         if let (Some(facts), Some(path)) = (&fetched, &path) {
             if let Some(parent) = path.parent() {
@@ -103,6 +103,7 @@ fn validated_item(client: &reqwest::blocking::Client, item: &Value) -> Option<Va
     }
     item["controller_support"] = facts["controller_support"].clone();
     item["genres"] = facts["genres"].clone();
+    item["release_date"] = facts["release_date"].clone();
     Some(item)
 }
 
@@ -154,6 +155,25 @@ fn validate_featured(mut value: Value) -> Value {
         }
     }
     value
+}
+
+fn original_release(item: &Value) -> Option<i64> {
+    let release = item.get("release_date")?;
+    if release.get("coming_soon").and_then(Value::as_bool) == Some(true) {
+        return None;
+    }
+    let date = release.get("date")?.as_str()?;
+    [
+        "%d %b, %Y",
+        "%b %d, %Y",
+        "%d %B, %Y",
+        "%B %d, %Y",
+        "%Y-%m-%d",
+    ]
+    .into_iter()
+    .find_map(|format| chrono::NaiveDate::parse_from_str(date, format).ok())?
+    .and_hms_opt(0, 0, 0)
+    .map(|date| date.and_utc().timestamp())
 }
 
 fn item_info(item: &Value, new_release: bool) -> Option<(AppId, Arc<AppInfo>)> {
@@ -265,6 +285,7 @@ fn item_info(item: &Value, new_release: bool) -> Option<(AppId, Arc<AppInfo>)> {
         description,
         desktop_ids: vec![format!("steam.{id}")],
         categories,
+        first_release: original_release(item),
         screenshots,
         urls: vec![AppUrl::Homepage(store_url(id))],
         ..AppInfo::default()
@@ -331,7 +352,7 @@ fn native_pick(id: u64, data: &Value) -> Option<Value> {
     }
     let mut item = serde_json::json!({
         "id": id, "type": 0, "catalog_type": "game", "name": data.get("name")?,
-        "platforms": data.get("platforms")?, "controller_support": data.get("controller_support"), "genres": data.get("genres"),
+        "platforms": data.get("platforms")?, "controller_support": data.get("controller_support"), "genres": data.get("genres"), "release_date": data.get("release_date"),
         "header_image": data.get("header_image"), "price": data.get("price_overview"),
     });
     if data.get("is_free").and_then(Value::as_bool) == Some(true) {
@@ -468,6 +489,34 @@ pub fn cache_images(apps: &Apps) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn original_dates_are_parsed_without_turning_updates_or_future_titles_into_new_games() {
+        let item =
+            serde_json::json!({"release_date": {"date": "27 Sep, 2023", "coming_soon": false}});
+        let timestamp = original_release(&item).unwrap();
+        assert_eq!(
+            chrono::DateTime::from_timestamp(timestamp, 0)
+                .unwrap()
+                .format("%Y-%m-%d")
+                .to_string(),
+            "2023-09-27"
+        );
+        assert_eq!(
+            original_release(&serde_json::json!({"release_date": {"date": "Sep 2026"}})),
+            None
+        );
+        assert_eq!(
+            original_release(
+                &serde_json::json!({"release_date": {"date": "27 Sep, 2027", "coming_soon": true}})
+            ),
+            None
+        );
+        assert_eq!(
+            original_release(&serde_json::json!({"date_updated": "2026-10-03"})),
+            None
+        );
+    }
+
     #[test]
     fn steam_genres_join_the_same_subcategories_without_guessing() {
         let item = serde_json::json!({

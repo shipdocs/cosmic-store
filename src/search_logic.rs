@@ -159,6 +159,14 @@ pub fn sort_results(
                 }
             });
         }
+        SearchSortMode::NewestGames => {
+            results.par_sort_unstable_by(|a, b| {
+                b.info
+                    .first_release
+                    .cmp(&a.info.first_release)
+                    .then_with(|| LANGUAGE_SORTER.compare(&a.info.name, &b.info.name))
+            });
+        }
         SearchSortMode::RecentlyUpdated => {
             results.par_sort_unstable_by(|a, b| {
                 let a_timestamp = a.info.releases.first().and_then(|r| r.timestamp);
@@ -789,6 +797,38 @@ mod tests {
         fn is_package_available(&self, _: &[String]) -> bool {
             false
         }
+    }
+
+    #[test]
+    fn newest_games_sorts_launch_dates_and_does_not_promote_recent_updates() {
+        let mut results = Vec::new();
+        for (name, first_release) in [("Old", Some(100)), ("Unknown", None), ("New", Some(200))] {
+            results.push(SearchResult::new(
+                "steam",
+                AppId::new(name),
+                None,
+                Arc::new(AppInfo {
+                    name: name.to_string(),
+                    first_release,
+                    releases: vec![crate::app_info::AppRelease {
+                        timestamp: Some(9999),
+                        version: "1".into(),
+                        description: None,
+                        url: None,
+                    }],
+                    ..AppInfo::default()
+                }),
+                0,
+            ));
+        }
+        sort_results(&mut results, SearchSortMode::NewestGames, &HashMap::new());
+        assert_eq!(
+            results
+                .iter()
+                .map(|r| r.info.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["New", "Old", "Unknown"]
+        );
     }
 
     #[test]

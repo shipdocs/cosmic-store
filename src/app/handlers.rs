@@ -132,6 +132,11 @@ pub fn handle_search_message(app: &mut App, message: Message) -> Task<Message> {
         }
         Message::SearchInput(input) => {
             if input != app.search_input {
+                if !input.is_empty()
+                    && app.search_sort_mode == crate::search::SearchSortMode::NewestGames
+                {
+                    app.search_sort_mode = crate::search::SearchSortMode::Relevance;
+                }
                 app.search_active = !input.is_empty();
                 app.results_limit = crate::constants::MAX_RESULTS;
                 app.search_input = input;

@@ -7,7 +7,7 @@ test -x "$binary"
 mkdir -p "$output"
 output=$(realpath "$output")
 architecture=$(dpkg --print-architecture)
-version="0.1.0+kompas.$(date -u +%Y%m%d).$(git rev-parse --short HEAD)"
+version="0.1.0+kompas.$(date -u +%Y%m%d%H%M%S).$(git rev-parse --short HEAD)"
 staging=$(mktemp -d)
 trap 'rm -rf "$staging"' EXIT
 install -Dm0755 "$binary" "$staging/usr/bin/cosmic-store"

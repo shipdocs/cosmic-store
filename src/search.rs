@@ -28,6 +28,7 @@ pub enum SearchSortMode {
     RecentlyUpdated,
     BestWaylandSupport,
     Name,
+    NewestGames,
 }
 
 /// Wayland compatibility filter mode
@@ -175,6 +176,25 @@ impl SearchResult {
             name_row.push(badge);
         }
 
+        let game_date = if self
+            .info
+            .categories
+            .iter()
+            .any(|category| category == "Game")
+        {
+            self.info
+                .first_release
+                .and_then(|date| chrono::DateTime::from_timestamp(date, 0))
+                .map(|date| {
+                    fl!(
+                        "game-release-date",
+                        date = date.format("%Y-%m-%d").to_string()
+                    )
+                })
+                .or_else(|| Some(fl!("game-release-unknown")))
+        } else {
+            None
+        };
         if self.backend_name == crate::catalog::STEAM {
             let mut card = widget::column::with_capacity(4).spacing(spacing.space_xxs);
             if let Some(path) = crate::catalog::image_path(&self.info).filter(|p| p.is_file()) {
@@ -197,10 +217,11 @@ impl SearchResult {
             return widget::container(
                 card.push(widget::text::body(&self.info.name))
                     .push(widget::text::caption(&self.info.summary))
-                    .push(widget::text::caption("Steam")),
+                    .push(widget::text::caption("Steam"))
+                    .push_maybe(game_date.map(widget::text::caption)),
             )
             .width(Length::Fixed(width as f32))
-            .height(Length::Fixed(224.0))
+            .height(Length::Fixed(248.0))
             .padding(spacing.space_s)
             .class(theme::Container::Card)
             .into();
@@ -268,12 +289,19 @@ impl SearchResult {
                 .spacing(spacing.space_s)
                 .into(),
             ])
+            .push_maybe(game_date.map(widget::text::caption))
             .align_x(Alignment::Start)
             .spacing(spacing.space_s),
         )
         .align_y(Alignment::Center)
         .width(Length::Fixed(width as f32))
-        .height(Length::Fixed(176.0))
+        .height(Length::Fixed(
+            if self.info.categories.iter().any(|c| c == "Game") {
+                204.0
+            } else {
+                176.0
+            },
+        ))
         .padding(spacing.space_s)
         .class(theme::Container::Card)
         .into()

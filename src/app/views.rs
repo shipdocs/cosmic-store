@@ -83,6 +83,9 @@ pub fn render_category_page<'a>(
         .spacing(space_xxs)
         .width(Length::Fill);
     column = column.push(widget::text::title2(nav_page.title()));
+    if nav_page == NavPage::Game {
+        column = column.push(widget::text::caption(fl!("game-date-help")));
+    }
     if matches!(nav_page, NavPage::Game | NavPage::AllApps)
         && category_results.as_ref().is_some_and(|(_, results)| {
             results

@@ -43,6 +43,12 @@ These observations do not establish that every other store feature improves our 
 | Ratings | No community rating integration yet | Read existing source ratings first; no invented stars and no empty submission button. |
 | Install flow | Backend installs for local app sources; external storefront / launcher handoff for Steam and Heroic | Real Zorin install, launch, cancel and error-recovery testing is still required. CI startup is necessary but insufficient. |
 
+## Game age and default ordering
+
+Games defaults to **Newest games (release date)**. This uses a separate original product launch timestamp rather than AppStream's latest package/version update. Steam's validated English product metadata supplies the original release date; complete dates are parsed and displayed on game cards. Coming-soon and partial dates are not guessed. Other sources currently lack reliable original launch dates and remain explicitly unknown, below dated games. Recently updated stays a separate manual sort. A recent maintenance release does not establish that the game itself is new.
+
+The current/native Steam selection stays a distinct section above the complete catalog. This does not imply that all current commercial games support Linux natively. Enabling Windows/Proton results remains explicit, and actual Proton/hardware compatibility is still a separate gap.
+
 ## Three separate kinds of evidence
 
 1. **Popularity:** a reported count for a stated provider and time period. Flathub downloads can include updates and are not an active-user count. Steam sales ranks and review counts are different measurements. A system package can be excellent without a download metric.

@@ -101,6 +101,7 @@ pub fn handle_search_message(app: &mut App, message: Message) -> Task<Message> {
             app.search_active = false;
             app.search_input.clear();
             app.search_pending = false;
+            app.restore_game_sort();
             if app.search_results.take().is_some() {
                 app.update_scroll()
             } else {
@@ -126,6 +127,7 @@ pub fn handle_search_message(app: &mut App, message: Message) -> Task<Message> {
             app.store_source = crate::search::StoreSource::All;
             app.native_only = true;
             app.search_sort_mode = crate::search::SearchSortMode::Relevance;
+            app.restore_game_sort();
             app.wayland_filter = crate::search::WaylandFilter::All;
             app.results_limit = crate::constants::MAX_RESULTS;
             app.refresh_store()
@@ -144,6 +146,7 @@ pub fn handle_search_message(app: &mut App, message: Message) -> Task<Message> {
                     app.search()
                 } else {
                     app.search_results = None;
+                    app.restore_game_sort();
                     app.update_scroll()
                 }
             } else {

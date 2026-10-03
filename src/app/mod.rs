@@ -233,6 +233,17 @@ impl App {
         self.pending_operations.insert(id, (operation, 0.0));
     }
 
+    pub(crate) fn restore_game_sort(&mut self) {
+        if self.nav_model.active_data::<NavPage>() == Some(&NavPage::Game)
+            && self.search_sort_mode == SearchSortMode::Relevance
+        {
+            self.search_sort_mode = SearchSortMode::NewestGames;
+            if let Some((_, results)) = &mut self.category_results {
+                crate::search_logic::sort_results(results, self.search_sort_mode, &self.app_stats);
+            }
+        }
+    }
+
     pub(crate) fn active_categories(&self) -> Option<&'static [Category]> {
         let page = self.nav_model.active_data::<NavPage>()?;
         if self.subcategory > 0 {

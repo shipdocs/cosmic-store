@@ -119,3 +119,37 @@ jobs:
           name: store-x11-smoke
           path: smoke-artifacts/
           if-no-files-found: ignore
+
+  publish-first-preview:
+    needs: lint
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: kompas-zorin-preview-amd64
+          path: preview
+      - name: Publish the tested first preview once
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # A fixed first-preview tag: later development pushes never move it.
+          if gh release view v0.1.0-preview.1 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo 'The first preview is already published.'
+            exit 0
+          fi
+          cd preview
+          sha256sum -c SHA256SUMS
+          packages=( *.deb )
+          test "${#packages[@]}" -eq 1
+          cp "${packages[0]}" kompas-preview-amd64.deb
+          sha256sum kompas-preview-amd64.deb > SHA256SUMS
+          gh release create v0.1.0-preview.1 kompas-preview-amd64.deb SHA256SUMS \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
+            --title 'Kompas 0.1.0 — First public preview' \
+            --notes-file ../docs/releases/v0.1.0-preview.1.md

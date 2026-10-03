@@ -6,9 +6,12 @@ Kompas is independently maintained by ShipDocs and built on [COSMIC Store](https
 
 The program and package are named `kompas`. A `cosmic-store` command alias is retained for existing scripts. The app ID is `app.shipdocs.Kompas`; old preferences and file associations are preserved. This is a ShipDocs project, not an official Zorin store.
 
+[Project website](https://shipdocs.github.io/kompas/) · [Preview release](https://github.com/shipdocs/kompas/releases/tag/v0.1.0-preview.1)
+
 ## Install the Zorin test build
 
-Download **kompas-zorin-preview-amd64** from the latest successful
+Download the `.deb` and checksums from the [preview release](https://github.com/shipdocs/kompas/releases/tag/v0.1.0-preview.1).
+For the newest development package, download **kompas-zorin-preview-amd64** from the latest successful
 [development build](https://github.com/shipdocs/kompas/actions/workflows/lint.yml),
 extract the ZIP and install the `.deb` on Zorin 18 / Ubuntu 24.04 (64-bit Intel/AMD):
 

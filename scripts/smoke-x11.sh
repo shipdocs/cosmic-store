@@ -4,9 +4,13 @@ set -euo pipefail
 binary=${1:-target/debug/cosmic-store}
 output=${2:-smoke-artifacts}
 mkdir -p "$output"
-RUST_LOG=cosmic_store=info "$binary" > "$output/startup.log" 2>&1 &
+binary=$(realpath "$binary")
+output=$(realpath "$output")
+# Installed binaries must work without access to the repository's resources.
+runtime_dir=$(mktemp -d)
+(cd "$runtime_dir"; exec env RUST_LOG=cosmic_store=info "$binary") > "$output/startup.log" 2>&1 &
 app_pid=$!
-trap 'kill "$app_pid" 2>/dev/null || true' EXIT
+trap 'kill "$app_pid" 2>/dev/null || true; rm -rf "$runtime_dir"' EXIT
 window_id=''
 for attempt in $(seq 1 25); do
     if ! kill -0 "$app_pid" 2>/dev/null; then

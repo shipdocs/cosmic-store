@@ -20,7 +20,7 @@ fn client() -> Result<reqwest::blocking::Client, reqwest::Error> {
 }
 
 fn cache_path() -> Option<PathBuf> {
-    Some(dirs::cache_dir()?.join("cosmic-store/steam-featured-v2.json"))
+    Some(dirs::cache_dir()?.join("cosmic-store/steam-featured-v3.json"))
 }
 
 pub fn steam_id(info: &AppInfo) -> Option<u64> {
@@ -58,7 +58,8 @@ fn validated_item(client: &reqwest::blocking::Client, item: &Value) -> Option<Va
     if id == 0 {
         return None;
     }
-    let path = dirs::cache_dir().map(|p| p.join(format!("cosmic-store/steam-metadata/{id}.json")));
+    let path =
+        dirs::cache_dir().map(|p| p.join(format!("cosmic-store/steam-metadata-v2/{id}.json")));
     let cached = path
         .as_ref()
         .and_then(|p| fs::read(p).ok())
@@ -77,7 +78,7 @@ fn validated_item(client: &reqwest::blocking::Client, item: &Value) -> Option<Va
             .send().ok().and_then(|r| r.error_for_status().ok()).and_then(|r| r.json::<Value>().ok())
             .and_then(|v| {
                 let data = v.get(id.to_string())?.get("data")?;
-                Some(serde_json::json!({"type": data.get("type")?, "platforms": data.get("platforms"), "controller_support": data.get("controller_support")}))
+                Some(serde_json::json!({"type": data.get("type")?, "platforms": data.get("platforms"), "controller_support": data.get("controller_support"), "genres": data.get("genres")}))
             });
         if let (Some(facts), Some(path)) = (&fetched, &path) {
             if let Some(parent) = path.parent() {
@@ -101,6 +102,7 @@ fn validated_item(client: &reqwest::blocking::Client, item: &Value) -> Option<Va
         map.remove("linux_available");
     }
     item["controller_support"] = facts["controller_support"].clone();
+    item["genres"] = facts["genres"].clone();
     Some(item)
 }
 
@@ -233,6 +235,22 @@ fn item_info(item: &Value, new_release: bool) -> Option<(AppId, Arc<AppInfo>)> {
         }
         .to_string(),
     ];
+    if let Some(genres) = item.get("genres").and_then(Value::as_array) {
+        for genre in genres {
+            let category = match genre.get("id").and_then(Value::as_str) {
+                Some("1") => Some("ActionGame"),
+                Some("2") => Some("StrategyGame"),
+                Some("3") => Some("RolePlaying"),
+                Some("9" | "28") => Some("Simulation"),
+                Some("18") => Some("SportsGame"),
+                Some("25") => Some("AdventureGame"),
+                _ => None,
+            };
+            if let Some(category) = category {
+                categories.push(category.to_string());
+            }
+        }
+    }
     if linux {
         categories.push(NATIVE_LINUX.to_string());
     }
@@ -313,7 +331,7 @@ fn native_pick(id: u64, data: &Value) -> Option<Value> {
     }
     let mut item = serde_json::json!({
         "id": id, "type": 0, "catalog_type": "game", "name": data.get("name")?,
-        "platforms": data.get("platforms")?, "controller_support": data.get("controller_support"),
+        "platforms": data.get("platforms")?, "controller_support": data.get("controller_support"), "genres": data.get("genres"),
         "header_image": data.get("header_image"), "price": data.get("price_overview"),
     });
     if data.get("is_free").and_then(Value::as_bool) == Some(true) {
@@ -450,6 +468,18 @@ pub fn cache_images(apps: &Apps) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn steam_genres_join_the_same_subcategories_without_guessing() {
+        let item = serde_json::json!({
+            "id": 42, "name": "Example", "platforms": {"linux": true},
+            "genres": [{"id": "2"}, {"id": "28"}, {"id": "999"}]
+        });
+        let (_, info) = item_info(&item, false).unwrap();
+        assert!(info.categories.iter().any(|c| c == "StrategyGame"));
+        assert!(info.categories.iter().any(|c| c == "Simulation"));
+        assert!(!info.categories.iter().any(|c| c == "ActionGame"));
+    }
+
     #[test]
     fn filters_packages_and_deduplicates_featured_games() {
         let value = serde_json::json!({"top_sellers":{"items":[{"id":42,"type":0,"name":"Game"},{"id":7,"type":1,"name":"Bundle"}]},"new_releases":{"items":[{"id":42,"type":0,"name":"Game"}]}});

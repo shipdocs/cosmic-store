@@ -96,6 +96,10 @@ pub struct App {
     pub(crate) explore_page_opt: Option<ExplorePage>,
     pub(crate) key_binds: HashMap<KeyBind, Action>,
     pub(crate) nav_model: widget::nav_bar::Model,
+    pub(crate) nav_ids: Vec<(NavPage, widget::nav_bar::Id)>,
+    pub(crate) nav_history: Vec<(NavPage, usize)>,
+    pub(crate) subcategory: usize,
+    pub(crate) subcategory_options: Vec<String>,
     #[cfg(feature = "notify")]
     pub(crate) notification_opt: Option<Arc<Mutex<notify_rust::NotificationHandle>>>,
     pub(crate) pending_operation_id: u64,
@@ -229,6 +233,57 @@ impl App {
         self.pending_operations.insert(id, (operation, 0.0));
     }
 
+    pub(crate) fn active_categories(&self) -> Option<&'static [Category]> {
+        let page = self.nav_model.active_data::<NavPage>()?;
+        if self.subcategory > 0 {
+            page.subcategories()
+                .get(self.subcategory - 1)
+                .map(|subcategory| subcategory.categories)
+        } else {
+            page.categories()
+        }
+    }
+
+    pub(crate) fn can_go_back(&self) -> bool {
+        self.details_page_opt.is_some()
+            || self.search_active
+            || self.explore_page_opt.is_some()
+            || self.subcategory > 0
+            || !self.nav_history.is_empty()
+    }
+
+    pub(crate) fn go_back(&mut self) -> Task<Message> {
+        if self.details_page_opt.take().is_some() {
+            log::info!("back to catalog from details");
+            return self.update_scroll();
+        }
+        if self.search_active || self.search_results.is_some() {
+            return self.update(Message::SearchClear);
+        }
+        if self.explore_page_opt.take().is_some() {
+            return self.update_scroll();
+        }
+        if self.subcategory > 0 {
+            return self.update(Message::Subcategory(0));
+        }
+        if let Some((page, subcategory)) = self.nav_history.pop() {
+            if let Some(id) = self
+                .nav_ids
+                .iter()
+                .find(|(p, _)| *p == page)
+                .map(|(_, id)| *id)
+            {
+                let task = self.on_nav_select(id);
+                self.nav_history.pop(); // Back must not add a forward entry.
+                if subcategory > 0 {
+                    return Task::batch(vec![task, self.update(Message::Subcategory(subcategory))]);
+                }
+                return task;
+            }
+        }
+        Task::none()
+    }
+
     pub(crate) fn categories(&self, categories: &'static [Category]) -> Task<Message> {
         data::categories_task(
             self.apps.clone(),
@@ -337,11 +392,7 @@ impl App {
 
     pub(crate) fn refresh_store(&mut self) -> Task<Message> {
         let mut tasks = vec![self.explore_results_all_batch()];
-        if let Some(categories) = self
-            .nav_model
-            .active_data::<NavPage>()
-            .and_then(|p| p.categories())
-        {
+        if let Some(categories) = self.active_categories() {
             tasks.push(self.categories(categories));
         }
         if !self.search_input.is_empty() {
@@ -1326,6 +1377,8 @@ impl App {
         views::render_category_page(
             nav_page,
             &self.category_results,
+            &self.subcategory_options,
+            self.subcategory,
             &self.sources(),
             self.results_limit,
             spacing,
@@ -1499,6 +1552,7 @@ impl Application for App {
         ];
 
         let mut nav_model = widget::nav_bar::Model::default();
+        let mut nav_ids = Vec::new();
         for &nav_page in NavPage::all() {
             if nav_page == NavPage::Applets && !crate::pages::cosmic_desktop() {
                 continue;
@@ -1509,6 +1563,7 @@ impl Application for App {
                 .text(nav_page.title())
                 .data::<NavPage>(nav_page)
                 .id();
+            nav_ids.push((nav_page, id));
             if nav_page == NavPage::default() {
                 //TODO: save last page?
                 nav_model.activate(id);
@@ -1539,6 +1594,10 @@ impl Application for App {
             explore_page_opt: None,
             key_binds: key_binds(),
             nav_model,
+            nav_ids,
+            nav_history: Vec::new(),
+            subcategory: 0,
+            subcategory_options: vec![fl!("subcategory-all")],
             #[cfg(feature = "notify")]
             notification_opt: None,
             pending_operation_id: 0,
@@ -1649,6 +1708,8 @@ impl Application for App {
         if self.core.window.show_context {
             // Close context drawer if open
             self.core.window.show_context = false;
+        } else if self.details_page_opt.is_some() {
+            return self.go_back();
         } else if self.search_active {
             // Close search if open
             self.search_active = false;
@@ -1660,6 +1721,19 @@ impl Application for App {
     }
 
     fn on_nav_select(&mut self, id: widget::nav_bar::Id) -> Task<Message> {
+        if let Some(page) = self.nav_model.active_data::<NavPage>().copied() {
+            if self
+                .nav_ids
+                .iter()
+                .any(|(p, nav_id)| *nav_id == id && *p != page)
+            {
+                self.nav_history.push((page, self.subcategory));
+            }
+            if self.nav_history.len() > 32 {
+                self.nav_history.remove(0);
+            }
+        }
+        self.subcategory = 0;
         self.results_limit = crate::constants::MAX_RESULTS;
         self.category_results = None;
         self.explore_page_opt = None;
@@ -1669,14 +1743,18 @@ impl Application for App {
         self.search_results = None;
         self.details_page_opt = None;
         self.nav_model.activate(id);
+        self.subcategory_options = vec![fl!("subcategory-all")];
+        if let Some(page) = self.nav_model.active_data::<NavPage>() {
+            self.subcategory_options.extend(
+                page.subcategories()
+                    .iter()
+                    .map(|s| crate::localize::LANGUAGE_LOADER.get(s.key)),
+            );
+        }
         let mut commands = Vec::with_capacity(2);
         self.scroll_views.clear();
         commands.push(self.update_scroll());
-        if let Some(categories) = self
-            .nav_model
-            .active_data::<NavPage>()
-            .and_then(|nav_page| nav_page.categories())
-        {
+        if let Some(categories) = self.active_categories() {
             commands.push(self.categories(categories));
         }
         if let Some(NavPage::Updates) = self.nav_model.active_data::<NavPage>() {
@@ -1741,7 +1819,12 @@ impl Application for App {
     }
 
     fn header_start(&self) -> Vec<Element<'_, Message>> {
-        views::render_header_start(&self.mode, &self.search_input, self.search_id.clone())
+        views::render_header_start(
+            &self.mode,
+            &self.search_input,
+            self.search_id.clone(),
+            self.can_go_back(),
+        )
     }
 
     fn header_end(&self) -> Vec<Element<'_, Message>> {

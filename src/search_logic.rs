@@ -779,6 +779,46 @@ mod tests {
     }
 
     #[test]
+    fn subcategories_use_metadata_and_keep_unclassified_apps_in_all() {
+        let mut apps = Apps::new();
+        for (id, categories) in [
+            ("strategy", vec!["Game", "StrategyGame"]),
+            ("action", vec!["Game", "ActionGame"]),
+            ("unclassified", vec!["Game"]),
+        ] {
+            apps.insert(
+                AppId::new(id),
+                vec![AppEntry {
+                    backend_name: "flatpak-system",
+                    info: Arc::new(AppInfo {
+                        name: id.to_string(),
+                        categories: categories.into_iter().map(str::to_string).collect(),
+                        ..AppInfo::default()
+                    }),
+                    installed: false,
+                }],
+            );
+        }
+        let results = categories_results(
+            &apps,
+            &Backends::new(),
+            &HashMap::new(),
+            "noble",
+            &[Category::StrategyGame],
+        );
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].info.name, "strategy");
+        let all = categories_results(
+            &apps,
+            &Backends::new(),
+            &HashMap::new(),
+            "noble",
+            &[Category::Game],
+        );
+        assert_eq!(all.len(), 3);
+    }
+
+    #[test]
     fn unavailable_system_source_falls_back_to_available_flatpak() {
         let info = Arc::new(AppInfo {
             name: "Example".to_string(),

@@ -65,6 +65,15 @@ done
 grep -Eq 'search "gimp" ready: [1-9][0-9]* results' "$output/startup.log"
 sleep 2
 import -window "$window_id" "$output/search-gimp.png"
+# Open a real app and use the visible back button to restore the search.
+xdotool mousemove --window "$window_id" 500 300 click 1
+sleep 2
+import -window "$window_id" "$output/app-details.png"
+xdotool mousemove --window "$window_id" 76 24 click 1
+sleep 2
+grep -q 'back to catalog from details' "$output/startup.log"
+import -window "$window_id" "$output/back-to-search.png"
+xdotool key --window "$window_id" ctrl+f
 xdotool key --window "$window_id" ctrl+a
 xdotool type --window "$window_id" --delay 40 'kompas-no-such-app-987654321'
 sleep 3
@@ -74,3 +83,10 @@ import -window "$window_id" "$output/search-empty.png"
 xdotool windowsize "$window_id" 620 768
 sleep 2
 import -window "$window_id" "$output/narrow.png"
+
+# Category browsing exposes metadata-driven subcategories without clearing filters.
+xdotool windowsize "$window_id" 1024 768
+xdotool mousemove --window "$window_id" 90 312 click 1
+sleep 2
+import -window "$window_id" "$output/game-subcategories.png"
+kill -0 "$app_pid"

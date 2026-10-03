@@ -58,9 +58,12 @@ pub fn render_search_results<'a>(
     column.into()
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn render_category_page<'a>(
     nav_page: NavPage,
     category_results: &'a Option<(&'static [Category], Vec<SearchResult>)>,
+    subcategory_options: &'a [String],
+    subcategory: usize,
     sources: &[Source],
     results_limit: usize,
     spacing: cosmic_theme::Spacing,
@@ -79,6 +82,17 @@ pub fn render_category_page<'a>(
         .spacing(space_xxs)
         .width(Length::Fill);
     column = column.push(widget::text::title2(nav_page.title()));
+    if subcategory_options.len() > 1 {
+        column = column.push(
+            widget::row::with_children(vec![
+                widget::text::body(fl!("subcategory-label")).into(),
+                widget::dropdown(subcategory_options, Some(subcategory), Message::Subcategory)
+                    .into(),
+            ])
+            .spacing(space_s)
+            .align_y(Alignment::Center),
+        );
+    }
     if matches!(nav_page, NavPage::Applets)
         && !sources.is_empty()
         && sources
@@ -737,9 +751,17 @@ pub fn render_header_start<'a>(
     mode: &Mode,
     search_input: &'a str,
     search_id: widget::Id,
+    can_go_back: bool,
 ) -> Vec<Element<'a, Message>> {
     match mode {
         Mode::Normal => vec![
+            widget::tooltip(
+                widget::button::icon(icon_cache_handle("store-back-symbolic", 16))
+                    .on_press_maybe(can_go_back.then_some(Message::Back)),
+                widget::text(fl!("back")),
+                widget::tooltip::Position::Bottom,
+            )
+            .into(),
             widget::text_input::search_input(fl!("search-store"), search_input)
                 .width(Length::Fixed(260.0))
                 .id(search_id)

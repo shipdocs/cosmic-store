@@ -102,6 +102,176 @@ impl NavPage {
         }
     }
 
+    pub fn subcategories(&self) -> &'static [Subcategory] {
+        match self {
+            Self::Game => &[
+                Subcategory {
+                    key: "subcategory-action",
+                    categories: &[Category::ActionGame, Category::Shooter],
+                },
+                Subcategory {
+                    key: "subcategory-adventure",
+                    categories: &[Category::AdventureGame, Category::RolePlaying],
+                },
+                Subcategory {
+                    key: "subcategory-strategy",
+                    categories: &[Category::StrategyGame],
+                },
+                Subcategory {
+                    key: "subcategory-simulation",
+                    categories: &[Category::Simulation],
+                },
+                Subcategory {
+                    key: "subcategory-puzzles",
+                    categories: &[Category::LogicGame],
+                },
+                Subcategory {
+                    key: "subcategory-arcade",
+                    categories: &[Category::ArcadeGame],
+                },
+                Subcategory {
+                    key: "subcategory-board",
+                    categories: &[Category::BoardGame, Category::CardGame],
+                },
+                Subcategory {
+                    key: "subcategory-sports",
+                    categories: &[Category::SportsGame],
+                },
+                Subcategory {
+                    key: "subcategory-emulators",
+                    categories: &[Category::Emulator],
+                },
+            ],
+            Self::Create => &[
+                Subcategory {
+                    key: "subcategory-photos",
+                    categories: &[Category::Photography, Category::RasterGraphics],
+                },
+                Subcategory {
+                    key: "subcategory-drawing",
+                    categories: &[Category::VectorGraphics, Category::ThreeDGraphics],
+                },
+                Subcategory {
+                    key: "subcategory-editing",
+                    categories: &[Category::AudioVideoEditing],
+                },
+            ],
+            Self::Work => &[
+                Subcategory {
+                    key: "subcategory-documents",
+                    categories: &[Category::WordProcessor],
+                },
+                Subcategory {
+                    key: "subcategory-spreadsheets",
+                    categories: &[Category::Spreadsheet],
+                },
+                Subcategory {
+                    key: "subcategory-presentations",
+                    categories: &[Category::Presentation],
+                },
+                Subcategory {
+                    key: "subcategory-organizing",
+                    categories: &[Category::Calendar],
+                },
+                Subcategory {
+                    key: "subcategory-finance",
+                    categories: &[Category::Finance],
+                },
+            ],
+            Self::Develop => &[
+                Subcategory {
+                    key: "subcategory-coding",
+                    categories: &[Category::IDE, Category::TextEditor],
+                },
+                Subcategory {
+                    key: "subcategory-debugging",
+                    categories: &[Category::Debugger],
+                },
+                Subcategory {
+                    key: "subcategory-databases",
+                    categories: &[Category::Database],
+                },
+                Subcategory {
+                    key: "subcategory-web",
+                    categories: &[Category::WebDevelopment],
+                },
+            ],
+            Self::Learn => &[
+                Subcategory {
+                    key: "subcategory-math",
+                    categories: &[Category::Math],
+                },
+                Subcategory {
+                    key: "subcategory-languages",
+                    categories: &[Category::Languages],
+                },
+                Subcategory {
+                    key: "subcategory-geography",
+                    categories: &[Category::Geography],
+                },
+                Subcategory {
+                    key: "subcategory-astronomy",
+                    categories: &[Category::Astronomy],
+                },
+            ],
+            Self::Relax => &[
+                Subcategory {
+                    key: "subcategory-music",
+                    categories: &[Category::Audio],
+                },
+                Subcategory {
+                    key: "subcategory-video",
+                    categories: &[Category::Video],
+                },
+                Subcategory {
+                    key: "subcategory-players",
+                    categories: &[Category::Player],
+                },
+                Subcategory {
+                    key: "subcategory-recording",
+                    categories: &[Category::Recorder],
+                },
+            ],
+            Self::Socialize => &[
+                Subcategory {
+                    key: "subcategory-browsers",
+                    categories: &[Category::WebBrowser],
+                },
+                Subcategory {
+                    key: "subcategory-email",
+                    categories: &[Category::Email],
+                },
+                Subcategory {
+                    key: "subcategory-chat",
+                    categories: &[Category::Chat],
+                },
+                Subcategory {
+                    key: "subcategory-transfer",
+                    categories: &[Category::FileTransfer],
+                },
+            ],
+            Self::Utilities => &[
+                Subcategory {
+                    key: "subcategory-files",
+                    categories: &[Category::FileManager],
+                },
+                Subcategory {
+                    key: "subcategory-archives",
+                    categories: &[Category::Archiving],
+                },
+                Subcategory {
+                    key: "subcategory-security",
+                    categories: &[Category::Security],
+                },
+                Subcategory {
+                    key: "subcategory-monitoring",
+                    categories: &[Category::Monitor],
+                },
+            ],
+            _ => &[],
+        }
+    }
+
     pub fn icon(&self) -> cosmic::widget::icon::Icon {
         use crate::icon_cache::icon_cache_icon;
         match self {
@@ -206,4 +376,10 @@ pub fn cosmic_desktop() -> bool {
         .unwrap_or_default()
         .split(':')
         .any(|desktop| desktop.eq_ignore_ascii_case("cosmic"))
+}
+
+/// Publisher metadata shared by AppStream and desktop entries.
+pub struct Subcategory {
+    pub key: &'static str,
+    pub categories: &'static [Category],
 }

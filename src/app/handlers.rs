@@ -65,13 +65,27 @@ pub fn handle_config_message(app: &mut App, message: Message) -> Task<Message> {
 
 pub fn handle_search_message(app: &mut App, message: Message) -> Task<Message> {
     match message {
+        Message::Subcategory(index) => {
+            let Some(page) = app.nav_model.active_data::<NavPage>() else {
+                return Task::none();
+            };
+            if index > page.subcategories().len() {
+                return Task::none();
+            }
+            app.subcategory = index;
+            app.category_results = None;
+            app.results_limit = crate::constants::MAX_RESULTS;
+            app.scroll_views.clear();
+            log::info!("subcategory selected: {}", index);
+            match app.active_categories() {
+                Some(categories) => {
+                    Task::batch(vec![app.categories(categories), app.update_scroll()])
+                }
+                None => Task::none(),
+            }
+        }
         Message::CategoryResults(categories, mut results) => {
-            if app
-                .nav_model
-                .active_data::<NavPage>()
-                .and_then(NavPage::categories)
-                != Some(categories)
-            {
+            if app.active_categories() != Some(categories) {
                 return Task::none();
             }
             app.filter_store_results(&mut results);
@@ -643,7 +657,8 @@ pub fn update(app: &mut App, message: Message) -> Task<Message> {
         | Message::RepositoryAddDialog(_) => {
             return app.handle_operation_message(message);
         }
-        Message::CategoryResults(_, _)
+        Message::Subcategory(_)
+        | Message::CategoryResults(_, _)
         | Message::SearchActivate
         | Message::SearchClear
         | Message::SearchInput(_)
@@ -684,6 +699,7 @@ pub fn update(app: &mut App, message: Message) -> Task<Message> {
         Message::ToggleUninstallPurgeData(value) => {
             app.uninstall_purge_data = value;
         }
+        Message::Back => return app.go_back(),
         Message::ExplorePage(explore_page_opt) => {
             app.explore_page_opt = explore_page_opt;
             return app.update_scroll();

@@ -1,4 +1,4 @@
-name := 'cosmic-store'
+name := 'kompas'
 export APPID := 'com.system76.CosmicStore'
 
 rootdir := ''
@@ -64,11 +64,12 @@ dev *args:
 
 # Run with debug logs
 run *args:
-    env RUST_LOG=cosmic_store=info RUST_BACKTRACE=full cargo run --release {{args}}
+    env RUST_LOG=kompas=info RUST_BACKTRACE=full cargo run --release {{args}}
 
 # Installs files
 install:
     install -Dm0755 {{bin-src}} {{bin-dst}}
+    ln -sf kompas {{base-dir}}/bin/cosmic-store
     install -Dm0644 {{desktop-src}} {{desktop-dst}}
     install -Dm0644 {{metainfo-src}} {{metainfo-dst}}
     for size in `ls {{icons-src}}`; do \
@@ -77,7 +78,7 @@ install:
 
 # Uninstalls installed files
 uninstall:
-    rm {{bin-dst}}
+    rm {{bin-dst}} {{base-dir}}/bin/cosmic-store
 
 # Vendor dependencies locally
 vendor:

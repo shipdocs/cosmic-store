@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # Run inside an X11 session (CI uses dbus-run-session and xvfb-run).
 set -euo pipefail
-binary=${1:-target/debug/cosmic-store}
+binary=${1:-target/debug/kompas}
 output=${2:-smoke-artifacts}
 mkdir -p "$output"
 binary=$(realpath "$binary")
 output=$(realpath "$output")
 # Installed binaries must work without access to the repository's resources.
 runtime_dir=$(mktemp -d)
-(cd "$runtime_dir"; exec env RUST_LOG=cosmic_store=info "$binary") > "$output/startup.log" 2>&1 &
+(cd "$runtime_dir"; exec env RUST_LOG=kompas=info "$binary") > "$output/startup.log" 2>&1 &
 app_pid=$!
 trap 'kill "$app_pid" 2>/dev/null || true; rm -rf "$runtime_dir"' EXIT
 window_id=''

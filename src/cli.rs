@@ -5,6 +5,7 @@ use cosmic::app::CosmicFlags;
 use cosmic::cosmic_config;
 
 #[derive(Debug, Default, Parser)]
+#[command(name = "kompas", bin_name = "kompas")]
 pub struct Cli {
     pub subcommand_opt: Option<String>,
     //TODO: should these extra gst-install-plugins-helper arguments actually be handled?

@@ -1,6 +1,6 @@
 #!/usr/bin/make -f
 
-export DESTDIR = debian/cosmic-store
+export DESTDIR = debian/kompas
 export VENDOR ?= 1
 
 %:

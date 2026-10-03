@@ -1247,7 +1247,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "cosmic-store"
+name = "kompas"
 version = "0.1.0"
 dependencies = [
  "appstream",

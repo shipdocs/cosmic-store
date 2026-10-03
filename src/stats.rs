@@ -5,11 +5,11 @@ use crate::app_info::WaylandCompatibility;
 use rust_embed::RustEmbed;
 
 const STATS_URL_V8: &str =
-    "https://github.com/shipdocs/cosmic-store/releases/latest/download/flathub-stats.bitcode-v0-8";
+    "https://github.com/shipdocs/kompas/releases/latest/download/flathub-stats.bitcode-v0-8";
 const STATS_URL: &str =
-    "https://github.com/shipdocs/cosmic-store/releases/latest/download/flathub-stats.bitcode-v0-7";
+    "https://github.com/shipdocs/kompas/releases/latest/download/flathub-stats.bitcode-v0-7";
 const METADATA_URL: &str =
-    "https://github.com/shipdocs/cosmic-store/releases/latest/download/flathub-metadata.json";
+    "https://github.com/shipdocs/kompas/releases/latest/download/flathub-metadata.json";
 const STATS_CACHE_PATH_V8: &str = "cosmic-store/flathub-stats.bitcode";
 const METADATA_CACHE_PATH: &str = "cosmic-store/flathub-metadata.json";
 const CACHE_MAX_AGE_SECS: u64 = 30 * 24 * 60 * 60; // 30 days

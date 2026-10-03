@@ -1,13 +1,15 @@
-# Kompas (COSMIC-based)
+# Kompas
 
-An independently maintained fork of [COSMIC Store](https://github.com/pop-os/cosmic-store), targeting Zorin and Ubuntu desktops. It combines Flatpak and PackageKit with software discovery and estimated Wayland compatibility.
+A unified software store for Zorin and Ubuntu. Discover applications and games from your configured system repositories, Flatpak sources and Steam in one interface, with filters that help you find relevant software.
+
+Kompas is independently maintained by ShipDocs and built on [COSMIC Store](https://github.com/pop-os/cosmic-store). It is a preview for user testing, not an official Zorin product. The interface defaults to English and includes Dutch translations.
 
 The program and package are named `kompas`. A `cosmic-store` command alias is retained for existing scripts. The app ID is `app.shipdocs.Kompas`; old preferences and file associations are preserved. This is a ShipDocs project, not an official Zorin store.
 
 ## Install the Zorin test build
 
 Download **kompas-zorin-preview-amd64** from the latest successful
-[development build](https://github.com/shipdocs/cosmic-store/actions/workflows/lint.yml),
+[development build](https://github.com/shipdocs/kompas/actions/workflows/lint.yml),
 extract the ZIP and install the `.deb` on Zorin 18 / Ubuntu 24.04 (64-bit Intel/AMD):
 
 ```bash
@@ -26,7 +28,9 @@ existing remotes and does not silently add software sources.
 ## Features
 
 - **Wayland Compatibility**: Shows badges and risk estimates derived from AppStream fields, Flatpak permissions, and framework heuristics. These estimates are not verified compatibility tests.
-- **Search Filters**: Sorting by download count, relevance, recent updates, and estimated Wayland compatibility, plus Wayland risk filters.
+- **Find relevant software**: Search, categories and subcategories, source filters, alphabetical sorting, popularity and recent updates.
+- **Fresh game discovery**: Game sections default to newest original release date. Games without a known release date appear below dated games; a new package update does not make an old game a new release.
+- **Easy navigation**: A visible back button, Alt+Left and Escape return to your previous results.
 - **Unified discovery**: System/Zorin packages, Flatpak and Steam with source selection, Linux-native filtering and consistent sorting.
 - **Complete browsing**: Progressive “Show more” browsing through the loaded catalog, result counts and recoverable empty states.
 - **Game launchers**: Discover Steam and Heroic (Epic/GOG); Steam game pages help install the client before handing over installation.
@@ -54,8 +58,8 @@ sudo apt install build-essential git pkg-config libflatpak-dev libssl-dev \
 Clone and build the development branch without changing the lockfile:
 
 ```bash
-git clone --branch develop https://github.com/shipdocs/cosmic-store.git
-cd cosmic-store
+git clone --branch develop https://github.com/shipdocs/kompas.git
+cd kompas
 rustup update stable
 cargo +stable build --release --locked
 cargo +stable run --release --locked
@@ -81,8 +85,8 @@ RUST_LOG=kompas=info RUST_BACKTRACE=1 cargo +stable run --release --locked
 ```
 
 The Debian packaging no longer requires Pop!_OS-specific `appstream-data-pop` or
-`cosmic-icons` packages. Packaging and icon rendering still need validation on a
-real Zorin installation. The instructions above run directly from the build
+`cosmic-icons` packages. CI validates package upgrades, AppStream metadata, app navigation and the package page
+in GNOME Software under X11. Your testing on a real Zorin installation is still needed. The instructions above run directly from the build
 directory and do not replace Zorin Software or Bazaar.
 
 A local Debian build uses the existing vendoring recipe and requires `debhelper`
@@ -108,7 +112,8 @@ Pull requests into `develop` and pushes to `develop` run these checks on Ubuntu 
 
 ## Current limitations
 
-- New releases on Steam are now shown; first-added dates for Flatpak/system apps are not available yet.
+- Release-date sorting depends on publisher metadata. Unknown dates go last; first-added dates for Flatpak/system apps are not available yet.
+- Download counts indicate popularity within their source, not quality or comparable sales across stores. A user review system is planned, not implemented; Kompas does not inherit COSMIC Store ratings.
 - Steam discovery and search are integrated. Epic and GOG catalogs remain future work.
 - Steam controls purchase and installation; ownership is not checked by this store.
 - ProtonDB opens as an external compatibility reference; compatibility ratings are not fetched or asserted.
@@ -116,7 +121,16 @@ Pull requests into `develop` and pushes to `develop` run these checks on Ubuntu 
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Submit pull requests against `develop`. Include the user-visible change and relevant
+validation. For discovery, ranking and review design, see
+[the store design review](docs/store-design-review.md).
+
+## Zorin distribution
+
+The preview `.deb` can be installed on an existing Zorin system. Inclusion in the
+standard Zorin installation requires a stable release, maintained distribution and
+agreement with the Zorin team. A signed APT repository would provide automatic
+updates; it has not been published yet.
 
 ## Unified discovery
 

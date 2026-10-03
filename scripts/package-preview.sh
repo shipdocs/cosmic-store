@@ -41,7 +41,7 @@ Section: admin
 Priority: optional
 Depends: $dependencies, libxkbcommon-x11-0, apt-config-icons, apt-config-icons-hidpi, apt-config-icons-large, apt-config-icons-large-hidpi, adwaita-icon-theme
 Recommends: flatpak, packagekit
-Homepage: https://github.com/shipdocs/cosmic-store
+Homepage: https://github.com/shipdocs/kompas
 Description: Discover apps and games in one place
  Kompas brings together Linux apps from your system and Flathub,
  alongside games from Steam. Browse categories and game genres,

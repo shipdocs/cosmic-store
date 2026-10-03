@@ -17,7 +17,7 @@ Build-Depends:
     python3,
     rust-all,
 Standards-Version: 4.6.2
-Homepage: https://github.com/shipdocs/cosmic-store
+Homepage: https://github.com/shipdocs/kompas
 
 Package: kompas
 Provides: cosmic-store

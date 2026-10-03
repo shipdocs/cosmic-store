@@ -5,8 +5,8 @@
   <project_license>GPL-3.0-only</project_license>
   <developer_name>ShipDocs</developer_name>
   <update_contact>info@shipdocs.app</update_contact>
-  <url type="homepage">https://github.com/shipdocs/cosmic-store</url>
-  <url type="bugtracker">https://github.com/shipdocs/cosmic-store</url>
+  <url type="homepage">https://github.com/shipdocs/kompas</url>
+  <url type="bugtracker">https://github.com/shipdocs/kompas</url>
   <pkgname>kompas</pkgname>
   <name>Kompas</name>
   <summary>Discover apps and games on Zorin and Ubuntu</summary>
@@ -32,11 +32,11 @@
   <screenshots>
     <screenshot type="default">
       <caption>Browse apps and games from one place</caption>
-      <image>https://github.com/shipdocs/cosmic-store/raw/refs/heads/develop/res/screenshots/explore.png</image>
+      <image>https://github.com/shipdocs/kompas/raw/refs/heads/develop/res/screenshots/explore.png</image>
     </screenshot>
     <screenshot>
       <caption>Find newer Linux games and explore genres</caption>
-      <image>https://github.com/shipdocs/cosmic-store/raw/refs/heads/develop/res/screenshots/games.png</image>
+      <image>https://github.com/shipdocs/kompas/raw/refs/heads/develop/res/screenshots/games.png</image>
     </screenshot>
   </screenshots>
   <categories><category>System</category><category>PackageManager</category></categories>

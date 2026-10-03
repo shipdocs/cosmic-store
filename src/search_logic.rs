@@ -386,7 +386,7 @@ pub fn explore_results_data(
     explore_page: ExplorePage,
     now: i64,
 ) -> Vec<SearchResult> {
-    match explore_page {
+    let mut results = match explore_page {
         ExplorePage::EditorsChoice => generic_search(
             apps,
             backends,
@@ -550,7 +550,26 @@ pub fn explore_results_data(
                 WaylandFilter::All,
             )
         }
-    }
+    };
+    sort_explore_results(&mut results, explore_page, app_stats);
+    results
+}
+
+/// Discovery game rows follow original release dates, including after an async refresh.
+fn sort_explore_results(
+    results: &mut [SearchResult],
+    page: ExplorePage,
+    app_stats: &std::collections::HashMap<
+        crate::app_id::AppId,
+        (u64, Option<WaylandCompatibility>),
+    >,
+) {
+    let mode = if matches!(page, ExplorePage::Games | ExplorePage::LinuxGames) {
+        SearchSortMode::NewestGames
+    } else {
+        SearchSortMode::Relevance
+    };
+    sort_results(results, mode, app_stats);
 }
 
 /// Extracted installed apps logic
@@ -719,15 +738,9 @@ pub fn explore_results_all(
         }
     }
 
-    // Sort each explore page's results
-    for results in results_map.values_mut() {
-        results.par_sort_unstable_by(|a, b| match a.weight.cmp(&b.weight) {
-            cmp::Ordering::Equal => match LANGUAGE_SORTER.compare(&a.info.name, &b.info.name) {
-                cmp::Ordering::Equal => LANGUAGE_SORTER.compare(a.backend_name(), b.backend_name()),
-                ordering => ordering,
-            },
-            ordering => ordering,
-        });
+    // Apply the same ordering to batch loads and individual page refreshes.
+    for (page, results) in &mut results_map {
+        sort_explore_results(results, *page, app_stats);
     }
 
     results_map
@@ -829,6 +842,47 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec!["New", "Old", "Unknown"]
         );
+    }
+
+    #[test]
+    fn discovery_game_rows_put_unknown_dates_last_in_batch_and_refresh() {
+        let mut apps = Apps::new();
+        for (name, date, downloads) in [
+            ("Unknown", None, 1_000_000),
+            ("Old", Some(100), 100),
+            ("New", Some(200), 1),
+        ] {
+            apps.insert(
+                AppId::new(name),
+                vec![AppEntry {
+                    backend_name: "steam",
+                    info: Arc::new(AppInfo {
+                        name: name.into(),
+                        kind: AppKind::DesktopApplication,
+                        categories: vec!["Game".into(), crate::catalog::NATIVE_LINUX.into()],
+                        first_release: date,
+                        monthly_downloads: downloads,
+                        ..AppInfo::default()
+                    }),
+                    installed: false,
+                }],
+            );
+        }
+        let backends = Backends::new();
+        let stats = HashMap::new();
+        let batch = explore_results_all(&apps, &backends, &stats, "noble", 300);
+        for page in [ExplorePage::Games, ExplorePage::LinuxGames] {
+            let refreshed = explore_results_data(&apps, &backends, &stats, "noble", page, 300);
+            for results in [&batch[&page], &refreshed] {
+                assert_eq!(
+                    results
+                        .iter()
+                        .map(|r| r.info.name.as_str())
+                        .collect::<Vec<_>>(),
+                    vec!["New", "Old", "Unknown"]
+                );
+            }
+        }
     }
 
     #[test]

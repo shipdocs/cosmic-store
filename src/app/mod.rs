@@ -1762,6 +1762,9 @@ impl Application for App {
         self.nav_model.activate(id);
         if self.nav_model.active_data::<NavPage>() == Some(&NavPage::Game) {
             self.search_sort_mode = SearchSortMode::NewestGames;
+            if let Some(results) = self.explore_results.get_mut(&ExplorePage::LinuxGames) {
+                crate::search_logic::sort_results(results, self.search_sort_mode, &self.app_stats);
+            }
         } else if self.search_sort_mode == SearchSortMode::NewestGames {
             self.search_sort_mode = SearchSortMode::Relevance;
         }

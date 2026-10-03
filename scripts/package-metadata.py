@@ -14,7 +14,27 @@ if len(sys.argv) > 2:
 ET.indent(tree, space='  ')
 tree.write(metainfo, encoding='utf-8', xml_declaration=True)
 catalog = ET.Element('components', {'version': '0.16', 'origin': 'ShipDocs'})
-catalog.append(copy.deepcopy(component))
+catalog_component = copy.deepcopy(component)
+# Catalog translations belong on description containers, whereas metainfo
+# translations belong on their paragraphs/lists. Convert without losing Dutch.
+lang_key = '{http://www.w3.org/XML/1998/namespace}lang'
+for parent in list(catalog_component.iter()):
+    for description in list(parent.findall('description')):
+        translations = {}
+        for section in list(description):
+            language = section.get(lang_key)
+            if language:
+                localized = translations.setdefault(
+                    language, ET.Element('description', {lang_key: language})
+                )
+                section.attrib.pop(lang_key)
+                localized.append(section)
+                description.remove(section)
+        for localized in translations.values():
+            parent.append(localized)
+for contact in list(catalog_component.findall('update_contact')):
+    catalog_component.remove(contact)
+catalog.append(catalog_component)
 catalog_tree = ET.ElementTree(catalog)
 ET.indent(catalog_tree, space='  ')
 output = share / 'swcatalog/xml/kompas.xml'

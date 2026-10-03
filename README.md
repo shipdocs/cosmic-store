@@ -28,6 +28,20 @@ under X11 by CI before the workflow succeeds.
 For Flatpak results, ensure Flathub is configured (see below). Kompas uses your
 existing remotes and does not silently add software sources.
 
+### Opening the package in Zorin Software
+
+Before the first installation, Zorin Software may show a generic package page with
+“Unknown License”, no release details and the download size labelled as installed
+size. Its local-DEB backend does not read the AppStream metadata inside an
+uninstalled package. Kompas includes GPL-3.0-only license information, AppStream
+metadata and a package description that explicitly states the license.
+
+If Software shows a description from an older preview, close it completely with
+`gnome-software --quit` and reopen the package. Alternatively, install with the
+terminal command above. After installation, restart Software so it can load the
+installed Kompas catalog. CI captures both the first-install page on a clean
+system and the page after installation; those are distinct checks.
+
 ## Features
 
 - **Wayland Compatibility**: Shows badges and risk estimates derived from AppStream fields, Flatpak permissions, and framework heuristics. These estimates are not verified compatibility tests.

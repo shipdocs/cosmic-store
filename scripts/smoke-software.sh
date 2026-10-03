@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# Inspect the installed package through GNOME Software's real local-DEB path.
+# Inspect a local DEB in GNOME Software, before or after installation.
 set -euo pipefail
 package=$(realpath "$1")
 output=$(realpath "$2")
+capture=${3:-kompas-in-software}
 mkdir -p "$output"
 gnome-software --local-filename="$package" > "$output/software.log" 2>&1 &
 software_pid=$!
@@ -17,5 +18,5 @@ done
 test -n "$window_id"
 # Software refines local-package metadata asynchronously.
 sleep 15
-import -window "$window_id" "$output/kompas-in-software.png"
-test -s "$output/kompas-in-software.png"
+import -window "$window_id" "$output/$capture.png"
+test -s "$output/$capture.png"

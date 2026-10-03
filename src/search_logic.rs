@@ -159,6 +159,14 @@ pub fn sort_results(
                 }
             });
         }
+        SearchSortMode::NewestGames => {
+            results.par_sort_unstable_by(|a, b| {
+                b.info
+                    .first_release
+                    .cmp(&a.info.first_release)
+                    .then_with(|| LANGUAGE_SORTER.compare(&a.info.name, &b.info.name))
+            });
+        }
         SearchSortMode::RecentlyUpdated => {
             results.par_sort_unstable_by(|a, b| {
                 let a_timestamp = a.info.releases.first().and_then(|r| r.timestamp);
@@ -231,6 +239,7 @@ pub fn search_results(
     sort_mode: SearchSortMode,
     wayland_filter: WaylandFilter,
 ) -> Vec<SearchResult> {
+    let input = input.trim();
     if input.starts_with("/") && Path::new(&input).is_file() {
         return Vec::new(); // File paths handled by url_handlers in main
     }
@@ -253,7 +262,7 @@ pub fn search_results(
         backends,
         app_stats,
         os_codename,
-        |_id,
+        |id,
          info,
          _installed,
          stats_downloads: Option<u64>,
@@ -267,6 +276,18 @@ pub fn search_results(
                 let downloads = stats_downloads.unwrap_or(info.monthly_downloads);
                 (weight << 56) - (downloads as i64)
             };
+
+            let alias_matches = |alias: &str| {
+                alias
+                    .trim_end_matches(".desktop")
+                    .rsplit('.')
+                    .next()
+                    .is_some_and(|name| name.eq_ignore_ascii_case(input))
+            };
+            if alias_matches(id.normalized()) || info.desktop_ids.iter().any(|id| alias_matches(id))
+            {
+                return Some(stats_weight(0));
+            }
 
             //TODO: fuzzy match (nucleus-matcher?)
             let regex_weight = |string: &str, weight: i64| -> Option<i64> {
@@ -776,6 +797,122 @@ mod tests {
         fn is_package_available(&self, _: &[String]) -> bool {
             false
         }
+    }
+
+    #[test]
+    fn newest_games_sorts_launch_dates_and_does_not_promote_recent_updates() {
+        let mut results = Vec::new();
+        for (name, first_release) in [("Old", Some(100)), ("Unknown", None), ("New", Some(200))] {
+            results.push(SearchResult::new(
+                "steam",
+                AppId::new(name),
+                None,
+                Arc::new(AppInfo {
+                    name: name.to_string(),
+                    first_release,
+                    releases: vec![crate::app_info::AppRelease {
+                        timestamp: Some(9999),
+                        version: "1".into(),
+                        description: None,
+                        url: None,
+                    }],
+                    ..AppInfo::default()
+                }),
+                0,
+            ));
+        }
+        sort_results(&mut results, SearchSortMode::NewestGames, &HashMap::new());
+        assert_eq!(
+            results
+                .iter()
+                .map(|r| r.info.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["New", "Old", "Unknown"]
+        );
+    }
+
+    #[test]
+    fn application_id_alias_beats_popular_description_mentions() {
+        let mut apps = Apps::new();
+        for (id, name, description, downloads) in [
+            (
+                "org.gimp.GIMP",
+                "GNU Image Manipulation Program",
+                "Photo editor",
+                1,
+            ),
+            (
+                "org.example.Cleaner",
+                "Cleaner",
+                "Cleans GIMP files",
+                1_000_000,
+            ),
+        ] {
+            apps.insert(
+                AppId::new(id),
+                vec![AppEntry {
+                    backend_name: "flatpak-system",
+                    info: Arc::new(AppInfo {
+                        name: name.to_string(),
+                        description: description.to_string(),
+                        monthly_downloads: downloads,
+                        ..AppInfo::default()
+                    }),
+                    installed: false,
+                }],
+            );
+        }
+        let results = search_results(
+            &apps,
+            &Backends::new(),
+            &HashMap::new(),
+            "noble",
+            " gimp ",
+            SearchSortMode::Relevance,
+            WaylandFilter::All,
+        );
+        assert_eq!(results.len(), 2);
+        assert_eq!(results[0].id, AppId::new("org.gimp.GIMP"));
+    }
+
+    #[test]
+    fn subcategories_use_metadata_and_keep_unclassified_apps_in_all() {
+        let mut apps = Apps::new();
+        for (id, categories) in [
+            ("strategy", vec!["Game", "StrategyGame"]),
+            ("action", vec!["Game", "ActionGame"]),
+            ("unclassified", vec!["Game"]),
+        ] {
+            apps.insert(
+                AppId::new(id),
+                vec![AppEntry {
+                    backend_name: "flatpak-system",
+                    info: Arc::new(AppInfo {
+                        name: id.to_string(),
+                        categories: categories.into_iter().map(str::to_string).collect(),
+                        ..AppInfo::default()
+                    }),
+                    installed: false,
+                }],
+            );
+        }
+        let results = categories_results(
+            &apps,
+            &Backends::new(),
+            &HashMap::new(),
+            "noble",
+            &[Category::StrategyGame],
+        );
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].info.name, "strategy");
+        let all = categories_results(
+            &apps,
+            &Backends::new(),
+            &HashMap::new(),
+            "noble",
+            &[Category::Game],
+        );
+        assert_eq!(all.len(), 3);
     }
 
     #[test]

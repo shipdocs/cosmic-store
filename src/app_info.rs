@@ -383,6 +383,8 @@ pub struct AppInfo {
     pub icons: Vec<AppIcon>,
     pub provides: Vec<AppProvide>,
     pub releases: Vec<AppRelease>,
+    /// Original product launch date, never inferred from a package update.
+    pub first_release: Option<i64>,
     pub screenshots: Vec<AppScreenshot>,
     pub urls: Vec<AppUrl>,
     pub monthly_downloads: u64,
@@ -586,6 +588,7 @@ impl AppInfo {
             icons,
             provides,
             releases,
+            first_release: None,
             screenshots,
             urls,
             monthly_downloads,

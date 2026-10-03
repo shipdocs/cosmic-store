@@ -20,12 +20,14 @@ use crate::search::{SearchResult, SearchSortMode, WaylandFilter};
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Action {
     SearchActivate,
+    Back,
 }
 
 impl Action {
     pub fn message(&self) -> Message {
         match self {
             Self::SearchActivate => Message::SearchActivate,
+            Self::Back => Message::Back,
         }
     }
 }
@@ -44,6 +46,8 @@ pub enum Message {
     Apps(Arc<crate::app_entry::Apps>),
     CatalogLoaded(crate::app_entry::Apps),
     CatalogImagesReady,
+    Back,
+    Subcategory(usize),
     CategoryResults(&'static [Category], Vec<SearchResult>),
     CheckUpdates,
     Config(Config),

@@ -58,5 +58,11 @@ pub fn key_binds() -> HashMap<KeyBind, Action> {
 
     bind!([Ctrl], Key::Character("f".into()), SearchActivate);
 
+    bind!(
+        [Alt],
+        Key::Named(cosmic::iced::keyboard::key::Named::ArrowLeft),
+        Back
+    );
+
     key_binds
 }

@@ -65,13 +65,27 @@ pub fn handle_config_message(app: &mut App, message: Message) -> Task<Message> {
 
 pub fn handle_search_message(app: &mut App, message: Message) -> Task<Message> {
     match message {
+        Message::Subcategory(index) => {
+            let Some(page) = app.nav_model.active_data::<NavPage>() else {
+                return Task::none();
+            };
+            if index > page.subcategories().len() {
+                return Task::none();
+            }
+            app.subcategory = index;
+            app.category_results = None;
+            app.results_limit = crate::constants::MAX_RESULTS;
+            app.scroll_views.clear();
+            log::info!("subcategory selected: {}", index);
+            match app.active_categories() {
+                Some(categories) => {
+                    Task::batch(vec![app.categories(categories), app.update_scroll()])
+                }
+                None => Task::none(),
+            }
+        }
         Message::CategoryResults(categories, mut results) => {
-            if app
-                .nav_model
-                .active_data::<NavPage>()
-                .and_then(NavPage::categories)
-                != Some(categories)
-            {
+            if app.active_categories() != Some(categories) {
                 return Task::none();
             }
             app.filter_store_results(&mut results);
@@ -87,6 +101,7 @@ pub fn handle_search_message(app: &mut App, message: Message) -> Task<Message> {
             app.search_active = false;
             app.search_input.clear();
             app.search_pending = false;
+            app.restore_game_sort();
             if app.search_results.take().is_some() {
                 app.update_scroll()
             } else {
@@ -112,12 +127,18 @@ pub fn handle_search_message(app: &mut App, message: Message) -> Task<Message> {
             app.store_source = crate::search::StoreSource::All;
             app.native_only = true;
             app.search_sort_mode = crate::search::SearchSortMode::Relevance;
+            app.restore_game_sort();
             app.wayland_filter = crate::search::WaylandFilter::All;
             app.results_limit = crate::constants::MAX_RESULTS;
             app.refresh_store()
         }
         Message::SearchInput(input) => {
             if input != app.search_input {
+                if !input.is_empty()
+                    && app.search_sort_mode == crate::search::SearchSortMode::NewestGames
+                {
+                    app.search_sort_mode = crate::search::SearchSortMode::Relevance;
+                }
                 app.search_active = !input.is_empty();
                 app.results_limit = crate::constants::MAX_RESULTS;
                 app.search_input = input;
@@ -125,6 +146,7 @@ pub fn handle_search_message(app: &mut App, message: Message) -> Task<Message> {
                     app.search()
                 } else {
                     app.search_results = None;
+                    app.restore_game_sort();
                     app.update_scroll()
                 }
             } else {
@@ -643,7 +665,8 @@ pub fn update(app: &mut App, message: Message) -> Task<Message> {
         | Message::RepositoryAddDialog(_) => {
             return app.handle_operation_message(message);
         }
-        Message::CategoryResults(_, _)
+        Message::Subcategory(_)
+        | Message::CategoryResults(_, _)
         | Message::SearchActivate
         | Message::SearchClear
         | Message::SearchInput(_)
@@ -684,6 +707,7 @@ pub fn update(app: &mut App, message: Message) -> Task<Message> {
         Message::ToggleUninstallPurgeData(value) => {
             app.uninstall_purge_data = value;
         }
+        Message::Back => return app.go_back(),
         Message::ExplorePage(explore_page_opt) => {
             app.explore_page_opt = explore_page_opt;
             return app.update_scroll();

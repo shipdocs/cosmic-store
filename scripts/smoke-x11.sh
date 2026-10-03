@@ -65,6 +65,15 @@ done
 grep -Eq 'search "gimp" ready: [1-9][0-9]* results' "$output/startup.log"
 sleep 2
 import -window "$window_id" "$output/search-gimp.png"
+# Open a real app and use the visible back button to restore the search.
+xdotool mousemove --window "$window_id" 500 300 click 1
+sleep 2
+import -window "$window_id" "$output/app-details.png"
+xdotool mousemove --window "$window_id" 76 24 click 1
+sleep 2
+grep -q 'back to catalog from details' "$output/startup.log"
+import -window "$window_id" "$output/back-to-search.png"
+xdotool key --window "$window_id" ctrl+f
 xdotool key --window "$window_id" ctrl+a
 xdotool type --window "$window_id" --delay 40 'kompas-no-such-app-987654321'
 sleep 3
@@ -74,3 +83,33 @@ import -window "$window_id" "$output/search-empty.png"
 xdotool windowsize "$window_id" 620 768
 sleep 2
 import -window "$window_id" "$output/narrow.png"
+
+# Category browsing exposes metadata-driven subcategories without clearing filters.
+xdotool windowsize "$window_id" 1024 768
+sleep 2
+xdotool windowfocus "$window_id"
+xdotool key --window "$window_id" ctrl+f ctrl+a BackSpace
+xdotool mousemove --window "$window_id" 90 312 click 1
+for attempt in $(seq 1 15); do
+    if grep -q 'searched for categories \[Game\]' "$output/startup.log"; then break; fi
+    sleep 1
+done
+grep -q 'searched for categories \[Game\]' "$output/startup.log"
+sleep 2
+import -window "$window_id" "$output/game-subcategories.png"
+kill -0 "$app_pid"
+
+# Select the first subcategory and verify a real genre search occurs.
+xdotool mousemove --window "$window_id" 430 290 click 1
+sleep 1
+import -window "$window_id" "$output/subcategory-menu.png"
+xdotool mousemove --window "$window_id" 430 374 click 1
+sleep 2
+grep -q 'subcategory selected: 1' "$output/startup.log"
+grep -q 'searched for categories \[ActionGame, Shooter\]' "$output/startup.log"
+import -window "$window_id" "$output/action-games.png"
+xdotool key --window "$window_id" alt+Left
+sleep 2
+grep -q 'subcategory selected: 0' "$output/startup.log"
+import -window "$window_id" "$output/back-to-games.png"
+kill -0 "$app_pid"

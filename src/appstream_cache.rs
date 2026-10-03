@@ -243,9 +243,9 @@ impl AppstreamCache {
         dirs::cache_dir().map(|x| x.join("cosmic-store").join(cache_name))
     }
 
-    /// Cache version includes the tolerant per-component YAML parser.
+    /// Cache version includes original product release-date metadata.
     fn cache_filename() -> &'static str {
-        "appstream_cache_v2.bitcode"
+        "appstream_cache_v3.bitcode"
     }
 
     /// Remove all files from cache not matching filename

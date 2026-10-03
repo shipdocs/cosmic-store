@@ -1379,6 +1379,10 @@ impl App {
             &self.category_results,
             &self.subcategory_options,
             self.subcategory,
+            self.explore_results
+                .get(&ExplorePage::LinuxGames)
+                .map(Vec::as_slice)
+                .unwrap_or(&[]),
             &self.sources(),
             self.results_limit,
             spacing,

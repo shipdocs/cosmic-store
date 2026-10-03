@@ -98,3 +98,18 @@ grep -q 'searched for categories \[Game\]' "$output/startup.log"
 sleep 2
 import -window "$window_id" "$output/game-subcategories.png"
 kill -0 "$app_pid"
+
+# Select the first subcategory and verify a real genre search occurs.
+xdotool mousemove --window "$window_id" 430 270 click 1
+sleep 1
+import -window "$window_id" "$output/subcategory-menu.png"
+xdotool mousemove --window "$window_id" 430 310 click 1
+sleep 2
+grep -q 'subcategory selected: 1' "$output/startup.log"
+grep -q 'searched for categories \[ActionGame, Shooter\]' "$output/startup.log"
+import -window "$window_id" "$output/action-games.png"
+xdotool key --window "$window_id" alt+Left
+sleep 2
+grep -q 'subcategory selected: 0' "$output/startup.log"
+import -window "$window_id" "$output/back-to-games.png"
+kill -0 "$app_pid"

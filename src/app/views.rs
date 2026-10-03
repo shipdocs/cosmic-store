@@ -64,6 +64,7 @@ pub fn render_category_page<'a>(
     category_results: &'a Option<(&'static [Category], Vec<SearchResult>)>,
     subcategory_options: &'a [String],
     subcategory: usize,
+    featured_games: &'a [SearchResult],
     sources: &[Source],
     results_limit: usize,
     spacing: cosmic_theme::Spacing,
@@ -121,6 +122,17 @@ pub fn render_category_page<'a>(
             .align_x(Alignment::Center)
             .width(Length::Fill),
         );
+    }
+    if nav_page == NavPage::Game && subcategory == 0 && !featured_games.is_empty() {
+        column = column.push(widget::text::title3(fl!("linux-games")));
+        column = column.push(SearchResult::grid_view(
+            &featured_games[..featured_games.len().min(4)],
+            spacing,
+            grid_width,
+            |index| Message::SelectExploreResult(ExplorePage::LinuxGames, index),
+            app_stats,
+        ));
+        column = column.push(widget::text::title3(fl!("all-games")));
     }
     //TODO: ensure category matches?
     match category_results {

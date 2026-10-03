@@ -261,3 +261,4 @@ subcategory-archives = Archives & compression
 subcategory-security = Security
 subcategory-monitoring = System monitoring
 steam-browse-scope = This overview shows a selection of Steam games. Use search to find more games.
+all-games = All games
